@@ -1,0 +1,15 @@
+{
+  "event_id": "EVT001",
+  "timestamp": "2026-09-01T10:30:00Z",
+  "source": "email",
+  "event_type": "email_received",
+  "user": "user01",
+  "host": "WORKSTATION01",
+  "source_ip": null,
+  "destination_ip": null,
+  "domain": "example.test",
+  "artifact": "suspicious_url",
+  "hash": null,
+  "description": "Suspicious email received",
+  "confidence": 0.85
+}

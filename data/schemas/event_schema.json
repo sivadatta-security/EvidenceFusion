@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/evidencefusion/event.schema.json",
+  "title": "EvidenceFusion Event",
+  "description": "Common event schema for normalized digital evidence used in DFIR investigations.",
+  "type": "object",
+
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "Unique identifier for the normalized event."
+    },
+
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Date and time when the event occurred."
+    },
+
+    "source": {
+      "type": "string",
+      "enum": [
+        "system",
+        "network",
+        "email",
+        "incident_response"
+      ],
+      "description": "Evidence source from which the event was obtained."
+    },
+
+    "event_type": {
+      "type": "string",
+      "description": "Type of activity represented by the event."
+    },
+
+    "user": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "User associated with the event, if available."
+    },
+
+    "host": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Host or workstation associated with the event, if available."
+    },
+
+    "source_ip": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Source IP address associated with the event, if available."
+    },
+
+    "destination_ip": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Destination IP address associated with the event, if available."
+    },
+
+    "domain": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Domain associated with the event, if available."
+    },
+
+    "artifact": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Relevant digital artifact associated with the event."
+    },
+
+    "hash": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Cryptographic hash associated with the evidence, if available."
+    },
+
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of the event."
+    },
+
+    "confidence": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Confidence score assigned to the normalized event."
+    }
+  },
+
+  "required": [
+    "event_id",
+    "timestamp",
+    "source",
+    "event_type",
+    "description",
+    "confidence"
+  ],
+
+  "additionalProperties": false
+}
