@@ -52,47 +52,50 @@ def insert_event(event):
     """Insert a normalized event into the SQLite database."""
     connection = get_connection()
 
-    connection.execute(
-        """
-        INSERT INTO events (
-            event_id,
-            timestamp,
-            source,
-            event_type,
-            user,
-            host,
-            source_ip,
-            destination_ip,
-            domain,
-            artifact,
-            hash,
-            description,
-            confidence
+    try:
+        connection.execute(
+            """
+            INSERT INTO events (
+                event_id,
+                timestamp,
+                source,
+                event_type,
+                user,
+                host,
+                source_ip,
+                destination_ip,
+                domain,
+                artifact,
+                hash,
+                description,
+                confidence
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event["event_id"],
+                event["timestamp"],
+                event["source"],
+                event["event_type"],
+                event.get("user"),
+                event.get("host"),
+                event.get("source_ip"),
+                event.get("destination_ip"),
+                event.get("domain"),
+                event.get("artifact"),
+                event.get("hash"),
+                event["description"],
+                event["confidence"],
+            ),
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            event["event_id"],
-            event["timestamp"],
-            event["source"],
-            event["event_type"],
-            event.get("user"),
-            event.get("host"),
-            event.get("source_ip"),
-            event.get("destination_ip"),
-            event.get("domain"),
-            event.get("artifact"),
-            event.get("hash"),
-            event["description"],
-            event["confidence"],
-        ),
-    )
 
-    connection.commit()
-    connection.close()
+        connection.commit()
 
-    print("EVENT INSERTED")
-    print("Event ID:", event["event_id"])
+        print("EVENT INSERTED")
+        print("Event ID:", event["event_id"])
+
+    finally:
+        connection.close()
 
 
 def get_events():
