@@ -34,31 +34,24 @@ def client(monkeypatch):
 
 
 def test_root(client):
-    """Verify the root endpoint."""
     response = client.get("/")
-
     assert response.status_code == 200
     assert response.json()["project"] == "EvidenceFusion"
 
 
 def test_health_check(client):
-    """Verify the health endpoint."""
     response = client.get("/health")
-
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
 
 
 def test_get_events(client):
-    """Verify that events can be retrieved."""
     response = client.get("/events")
-
     assert response.status_code == 200
     assert response.json() == []
 
 
 def test_create_event(client):
-    """Verify that a new event can be created."""
     event = {
         "event_id": "TEST_API_001",
         "timestamp": "2026-09-01T10:40:00Z",
@@ -88,7 +81,6 @@ def test_create_event(client):
 
 
 def test_duplicate_event(client):
-    """Verify that duplicate event IDs are rejected."""
     event = {
         "event_id": "TEST_API_DUPLICATE",
         "timestamp": "2026-09-01T10:45:00Z",
@@ -110,3 +102,54 @@ def test_duplicate_event(client):
 
     assert first_response.status_code == 201
     assert second_response.status_code == 409
+
+
+def test_create_event_rejects_invalid_timestamp(client):
+    event = {
+        "event_id": "TEST_INVALID_TIMESTAMP",
+        "timestamp": "string",
+        "source": "system",
+        "event_type": "process_created",
+        "user": "test_user",
+        "host": "TEST-PC",
+        "description": "Invalid timestamp test",
+        "confidence": 0.90
+    }
+
+    response = client.post("/events", json=event)
+
+    assert response.status_code == 422
+
+
+def test_create_event_rejects_invalid_source(client):
+    event = {
+        "event_id": "TEST_INVALID_SOURCE",
+        "timestamp": "2026-09-01T10:50:00Z",
+        "source": "unknown",
+        "event_type": "test_event",
+        "user": "test_user",
+        "host": "TEST-PC",
+        "description": "Invalid source test",
+        "confidence": 0.90
+    }
+
+    response = client.post("/events", json=event)
+
+    assert response.status_code == 422
+
+
+def test_create_event_rejects_invalid_confidence(client):
+    event = {
+        "event_id": "TEST_INVALID_CONFIDENCE",
+        "timestamp": "2026-09-01T10:55:00Z",
+        "source": "system",
+        "event_type": "test_event",
+        "user": "test_user",
+        "host": "TEST-PC",
+        "description": "Invalid confidence test",
+        "confidence": 1.5
+    }
+
+    response = client.post("/events", json=event)
+
+    assert response.status_code == 422

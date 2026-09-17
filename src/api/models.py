@@ -1,4 +1,26 @@
-from pydantic import BaseModel
+from datetime import datetime
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
+
+
+def validate_timestamp(value: str) -> str:
+    """Validate that a timestamp is ISO 8601 and timezone-aware."""
+    try:
+        parsed = datetime.fromisoformat(
+            value.replace("Z", "+00:00")
+        )
+    except ValueError as error:
+        raise ValueError(
+            "timestamp must be a valid ISO 8601 datetime"
+        ) from error
+
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(
+            "timestamp must include a timezone"
+        )
+
+    return value
 
 
 class EventCreate(BaseModel):
@@ -6,7 +28,12 @@ class EventCreate(BaseModel):
 
     event_id: str
     timestamp: str
-    source: str
+    source: Literal[
+        "system",
+        "network",
+        "email",
+        "incident_response",
+    ]
     event_type: str
     user: str | None = None
     host: str | None = None
@@ -16,7 +43,11 @@ class EventCreate(BaseModel):
     artifact: str | None = None
     hash: str | None = None
     description: str
-    confidence: float
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    _validate_timestamp = field_validator("timestamp")(
+        validate_timestamp
+    )
 
 
 class Event(BaseModel):
@@ -24,7 +55,12 @@ class Event(BaseModel):
 
     event_id: str
     timestamp: str
-    source: str
+    source: Literal[
+        "system",
+        "network",
+        "email",
+        "incident_response",
+    ]
     event_type: str
     user: str | None = None
     host: str | None = None
@@ -34,4 +70,8 @@ class Event(BaseModel):
     artifact: str | None = None
     hash: str | None = None
     description: str
-    confidence: float
+    confidence: float = Field(ge=0.0, le=1.0)
+
+    _validate_timestamp = field_validator("timestamp")(
+        validate_timestamp
+    )
