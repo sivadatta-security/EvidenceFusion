@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+from src.mitre.mapping import map_incident_to_mitre
+
 
 # Initial correlation configuration.
 TIME_WINDOW_MINUTES = 5
@@ -219,6 +221,11 @@ def summarize_incident(incident, events):
         default=0,
     )
 
+    mitre_mapping = map_incident_to_mitre(
+        incident,
+        events,
+    )
+
     return {
         **incident,
         "event_count": len(incident_events),
@@ -234,6 +241,7 @@ def summarize_incident(incident, events):
         "severity": classify_severity(
             max_correlation_score
         ),
+        "mitre_techniques": mitre_mapping["techniques"],
     }
 
 

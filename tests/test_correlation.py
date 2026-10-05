@@ -76,6 +76,7 @@ def test_events_outside_time_window_do_not_get_time_score():
     assert result["score"] == 0
     assert result["reasons"] == []
 
+
 def test_correlate_events_returns_only_related_pairs():
     events = [
         {
@@ -126,6 +127,7 @@ def test_correlate_events_does_not_create_relationship_for_time_only():
     relationships = correlate_events(events)
 
     assert relationships == []
+
 
 def test_build_incident_clusters_groups_connected_events():
     events = [
@@ -184,6 +186,7 @@ def test_build_incident_clusters_groups_connected_events():
 
     assert {"EVT005"} in cluster_event_ids
 
+
 def test_create_incidents_assigns_incident_ids():
     events = [
         {
@@ -221,12 +224,14 @@ def test_create_incidents_assigns_incident_ids():
     assert incidents[1]["incident_id"] == "INC002"
     assert incidents[1]["event_ids"] == ["EVT003"]
 
+
 def test_summarize_incident():
     events = [
         {
             "event_id": "EVT001",
             "timestamp": "2026-09-01T10:30:00Z",
-            "source": "email",
+            "source": "system",
+            "event_type": "powershell_execution",
             "user": "user01",
             "host": "WORKSTATION01",
             "domain": "malicious.test",
@@ -235,6 +240,7 @@ def test_summarize_incident():
             "event_id": "EVT002",
             "timestamp": "2026-09-01T10:31:00Z",
             "source": "network",
+            "event_type": "network",
             "user": "user01",
             "host": "WORKSTATION01",
             "domain": "malicious.test",
@@ -251,10 +257,19 @@ def test_summarize_incident():
     assert summary["event_count"] == 2
     assert summary["first_seen"] == "2026-09-01T10:30:00+00:00"
     assert summary["last_seen"] == "2026-09-01T10:31:00+00:00"
-    assert summary["sources"] == ["email", "network"]
+    assert summary["sources"] == ["network", "system"]
     assert summary["relationship_count"] == 1
     assert summary["max_correlation_score"] == 7
     assert summary["severity"] == "High"
+
+    assert summary["mitre_techniques"] == [
+        {
+            "technique_id": "T1059.001",
+            "technique_name": "PowerShell",
+            "event_ids": ["EVT001"],
+        }
+    ]
+
 
 def test_classify_severity():
     assert classify_severity(0) == "Low"
