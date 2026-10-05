@@ -3,6 +3,7 @@ from fastapi import FastAPI, HTTPException
 from src.api.database import get_events, insert_event
 from src.api.models import Event, EventCreate
 from src.api.timeline import sort_events_by_time
+from src.api.investigation import build_investigation
 
 
 app = FastAPI(
@@ -106,3 +107,36 @@ def read_timeline():
     return sort_events_by_time(
         [event.model_dump() for event in events]
     )
+
+@app.get("/incidents")
+def read_incidents():
+    """
+    Return structured investigation results.
+
+    Events are loaded from the database and processed through
+    the investigation pipeline.
+    """
+    rows = get_events()
+
+    events = []
+
+    for row in rows:
+        events.append(
+            {
+                "event_id": row[0],
+                "timestamp": row[1],
+                "source": row[2],
+                "event_type": row[3],
+                "user": row[4],
+                "host": row[5],
+                "source_ip": row[6],
+                "destination_ip": row[7],
+                "domain": row[8],
+                "artifact": row[9],
+                "hash": row[10],
+                "description": row[11],
+                "confidence": row[12],
+            }
+        )
+
+    return build_investigation(events)
