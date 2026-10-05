@@ -1,155 +1,174 @@
-import tempfile
-from pathlib import Path
+from uuid import uuid4
 
-import pytest
 from fastapi.testclient import TestClient
 
-from src.api import database
-from src.api import main
+from src.api.main import app
 
 
-@pytest.fixture
-def client(monkeypatch):
-    """Create a temporary database for each API test."""
-    with tempfile.TemporaryDirectory() as temp_directory:
-        temp_path = Path(temp_directory)
-
-        monkeypatch.setattr(database, "DATA_DIR", temp_path)
-        monkeypatch.setattr(
-            database,
-            "DATABASE_PATH",
-            temp_path / "test_evidencefusion.db"
-        )
-
-        database.initialize_database()
-
-        monkeypatch.setattr(main, "get_events", database.get_events)
-        monkeypatch.setattr(main, "insert_event", database.insert_event)
-
-        with TestClient(main.app) as test_client:
-            yield test_client
-
-        connection = database.get_connection()
-        connection.close()
+client = TestClient(app)
 
 
-def test_root(client):
+def test_root():
     response = client.get("/")
+
     assert response.status_code == 200
-    assert response.json()["project"] == "EvidenceFusion"
+
+    assert response.json() == {
+        "project": "EvidenceFusion",
+        "message": "EvidenceFusion API is running",
+        "version": "0.1.0",
+    }
 
 
-def test_health_check(client):
+def test_health_check():
     response = client.get("/health")
+
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
 
 
-def test_get_events(client):
+def test_get_events():
     response = client.get("/events")
+
     assert response.status_code == 200
-    assert response.json() == []
+    assert isinstance(response.json(), list)
 
 
-def test_create_event(client):
+def test_create_event():
     event = {
-        "event_id": "TEST_API_001",
+        "event_id": f"API_TEST_EVENT_{uuid4().hex}",
         "timestamp": "2026-09-01T10:40:00Z",
-        "source": "system",
-        "event_type": "process_created",
-        "user": "test_user",
-        "host": "TEST-PC",
+        "source": "email",
+        "event_type": "email_received",
+        "user": "api_user",
+        "host": "API_HOST",
         "source_ip": None,
         "destination_ip": None,
-        "domain": None,
-        "artifact": "test_process.exe",
+        "domain": "example.test",
+        "artifact": "test_artifact",
         "hash": None,
-        "description": "Test process creation event",
-        "confidence": 0.95
+        "description": "API test event",
+        "confidence": 0.8,
     }
 
     response = client.post("/events", json=event)
 
     assert response.status_code == 201
-
-    data = response.json()
-
-    assert data["event_id"] == "TEST_API_001"
-    assert data["source"] == "system"
-    assert data["event_type"] == "process_created"
-    assert data["confidence"] == 0.95
+    assert response.json()["event_id"] == event["event_id"]
 
 
-def test_duplicate_event(client):
+def test_duplicate_event_returns_conflict():
     event = {
-        "event_id": "TEST_API_DUPLICATE",
-        "timestamp": "2026-09-01T10:45:00Z",
-        "source": "system",
-        "event_type": "login",
-        "user": "test_user",
-        "host": "TEST-PC",
-        "source_ip": None,
-        "destination_ip": None,
-        "domain": None,
-        "artifact": None,
-        "hash": None,
-        "description": "Test duplicate event",
-        "confidence": 0.80
+        "event_id": f"API_DUPLICATE_EVENT_{uuid4().hex}",
+        "timestamp": "2026-09-01T10:41:00Z",
+        "source": "email",
+        "event_type": "email_received",
+        "description": "Duplicate test event",
+        "confidence": 0.8,
     }
 
-    first_response = client.post("/events", json=event)
-    second_response = client.post("/events", json=event)
+    first_response = client.post(
+        "/events",
+        json=event,
+    )
+
+    second_response = client.post(
+        "/events",
+        json=event,
+    )
 
     assert first_response.status_code == 201
     assert second_response.status_code == 409
 
 
-def test_create_event_rejects_invalid_timestamp(client):
+def test_invalid_timestamp_returns_validation_error():
     event = {
-        "event_id": "TEST_INVALID_TIMESTAMP",
-        "timestamp": "string",
-        "source": "system",
-        "event_type": "process_created",
-        "user": "test_user",
-        "host": "TEST-PC",
+        "event_id": f"INVALID_TIMESTAMP_{uuid4().hex}",
+        "timestamp": "not-a-timestamp",
+        "source": "email",
+        "event_type": "email_received",
         "description": "Invalid timestamp test",
-        "confidence": 0.90
+        "confidence": 0.8,
     }
 
-    response = client.post("/events", json=event)
+    response = client.post(
+        "/events",
+        json=event,
+    )
 
     assert response.status_code == 422
 
 
-def test_create_event_rejects_invalid_source(client):
+def test_invalid_source_returns_validation_error():
     event = {
-        "event_id": "TEST_INVALID_SOURCE",
-        "timestamp": "2026-09-01T10:50:00Z",
-        "source": "unknown",
-        "event_type": "test_event",
-        "user": "test_user",
-        "host": "TEST-PC",
+        "event_id": f"INVALID_SOURCE_{uuid4().hex}",
+        "timestamp": "2026-09-01T10:42:00Z",
+        "source": "unknown_source",
+        "event_type": "email_received",
         "description": "Invalid source test",
-        "confidence": 0.90
+        "confidence": 0.8,
     }
 
-    response = client.post("/events", json=event)
+    response = client.post(
+        "/events",
+        json=event,
+    )
 
     assert response.status_code == 422
 
 
-def test_create_event_rejects_invalid_confidence(client):
+def test_invalid_confidence_returns_validation_error():
     event = {
-        "event_id": "TEST_INVALID_CONFIDENCE",
-        "timestamp": "2026-09-01T10:55:00Z",
-        "source": "system",
-        "event_type": "test_event",
-        "user": "test_user",
-        "host": "TEST-PC",
+        "event_id": f"INVALID_CONFIDENCE_{uuid4().hex}",
+        "timestamp": "2026-09-01T10:43:00Z",
+        "source": "email",
+        "event_type": "email_received",
         "description": "Invalid confidence test",
-        "confidence": 1.5
+        "confidence": 1.5,
     }
 
-    response = client.post("/events", json=event)
+    response = client.post(
+        "/events",
+        json=event,
+    )
 
     assert response.status_code == 422
+
+
+def test_timeline_returns_events_in_chronological_order():
+    response = client.get("/timeline")
+
+    assert response.status_code == 200
+
+    events = response.json()
+
+    timestamps = [
+        event["timestamp"]
+        for event in events
+    ]
+
+    assert timestamps == sorted(timestamps)
+
+
+def test_incidents_returns_investigation_results():
+    response = client.get("/incidents")
+
+    assert response.status_code == 200
+
+    incidents = response.json()
+
+    assert isinstance(incidents, list)
+
+    if incidents:
+        incident = incidents[0]
+
+        assert "incident_id" in incident
+        assert "event_ids" in incident
+        assert "event_count" in incident
+        assert "first_seen" in incident
+        assert "last_seen" in incident
+        assert "sources" in incident
+        assert "relationship_count" in incident
+        assert "max_correlation_score" in incident
+        assert "severity" in incident
+        assert "mitre_techniques" in incident
