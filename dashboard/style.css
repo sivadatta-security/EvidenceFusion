@@ -718,3 +718,54 @@ textarea {
         padding: 18px 12px;
     }
 }
+
+.evidence-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.evidence-action-button {
+    padding: 9px 13px;
+    border: 1px solid #64748b;
+    border-radius: 7px;
+    cursor: pointer;
+    font: inherit;
+}
+
+.evidence-action-button:disabled {
+    cursor: wait;
+    opacity: 0.6;
+}
+
+.evidence-action-message {
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+    margin-top: 10px;
+}
+
+.evidence-custody {
+    margin-top: 12px;
+}
+
+.evidence-custody > summary,
+.evidence-metadata > summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 8px 0;
+}
+
+.custody-entry {
+    border: 1px solid #94a3b8;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+}
+
+.custody-entry pre,
+.evidence-custody pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-size: 0.85rem;
+}

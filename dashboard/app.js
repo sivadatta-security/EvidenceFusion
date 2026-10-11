@@ -238,6 +238,7 @@ function renderMitreTechniques(incidents) {
    INCIDENT EVIDENCE
    ========================= */
 
+
 function renderIncidentEvidence(evidence) {
     const container = document.getElementById(
         "incident-evidence-content"
@@ -276,14 +277,17 @@ function renderIncidentEvidence(evidence) {
             : "unknown";
 
         return `
-            <article class="evidence-card">
+            <article class="evidence-card"
+                     data-evidence-card="${escapeHtml(record.evidence_id)}">
+
                 <div class="evidence-card-header">
                     <div class="evidence-heading">
                         <h4>${escapeHtml(record.evidence_id)}</h4>
                         <p>${escapeHtml(record.artifact_type)}</p>
                     </div>
 
-                    <span class="verification verification-${statusClass}">
+                    <span class="verification verification-${statusClass}"
+                          data-verification-status>
                         ${escapeHtml(verification.replace(/_/g, " "))}
                     </span>
                 </div>
@@ -297,9 +301,36 @@ function renderIncidentEvidence(evidence) {
                     ${formatField("Acquired By", record.acquired_by)}
                 </div>
 
+                <div class="evidence-actions">
+                    <button type="button"
+                            class="evidence-action-button"
+                            data-action="verify"
+                            data-evidence-id="${escapeHtml(record.evidence_id)}">
+                        Verify Integrity
+                    </button>
+
+                    <button type="button"
+                            class="evidence-action-button"
+                            data-action="custody"
+                            data-evidence-id="${escapeHtml(record.evidence_id)}">
+                        View Chain of Custody
+                    </button>
+                </div>
+
+                <p class="evidence-action-message"
+                   data-verification-message
+                   aria-live="polite"></p>
+
+                <details class="evidence-custody"
+                         data-custody-panel>
+                    <summary>Chain of custody history</summary>
+                    <div data-custody-content>
+                        Select "View Chain of Custody" to load audit entries.
+                    </div>
+                </details>
+
                 <div class="evidence-links">
                     <strong>Linked Events (${links.length})</strong>
-
                     ${
                         links.length
                             ? `
@@ -314,28 +345,178 @@ function renderIncidentEvidence(evidence) {
                                     `).join("")}
                                 </ul>
                             `
-                            : `
-                                <p>
-                                    No event associations returned.
-                                </p>
-                            `
+                            : `<p>No event associations returned.</p>`
                     }
                 </div>
 
                 <details class="evidence-metadata">
                     <summary>Additional metadata</summary>
-                    <pre>${escapeHtml(
-                        JSON.stringify(metadata, null, 2)
-                    )}</pre>
+                    <pre>${escapeHtml(JSON.stringify(metadata, null, 2))}</pre>
                 </details>
             </article>
         `;
     }).join("");
+
+    container.querySelectorAll('[data-action="verify"]').forEach(button => {
+        button.addEventListener("click", async () => {
+            await verifyEvidenceIntegrity(
+                button.dataset.evidenceId,
+                button
+            );
+        });
+    });
+
+    container.querySelectorAll('[data-action="custody"]').forEach(button => {
+        button.addEventListener("click", async () => {
+            await loadEvidenceCustody(
+                button.dataset.evidenceId,
+                button
+            );
+        });
+    });
 }
 
+
 /* =========================
-   LOAD DASHBOARD
+   VERIFY EVIDENCE INTEGRITY
    ========================= */
+
+async function verifyEvidenceIntegrity(evidenceId, button) {
+    const card = button.closest("[data-evidence-card]");
+    if (!card) return;
+
+    const message = card.querySelector("[data-verification-message]");
+    const statusElement = card.querySelector("[data-verification-status]");
+
+    const verifiedBy = prompt(
+        "Enter the investigator ID or name performing verification:"
+    );
+
+    if (verifiedBy === null) return;
+
+    if (!verifiedBy.trim() || verifiedBy.trim().length > 128) {
+        message.textContent =
+            "Enter an investigator name between 1 and 128 characters.";
+        return;
+    }
+
+    button.disabled = true;
+    message.textContent = "Verifying evidence integrity...";
+
+    try {
+        const response = await fetch(
+            `${API_BASE_URL}/evidence/${encodeURIComponent(evidenceId)}/verify` +
+            `?verified_by=${encodeURIComponent(verifiedBy.trim())}`,
+            { method: "POST" }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(
+                data.detail ?? `Verification failed: HTTP ${response.status}`
+            );
+        }
+
+        const result = data.verification;
+        const status = String(
+            result.verification_status ?? "unavailable"
+        ).toLowerCase();
+
+        const allowedStatuses = [
+            "verified",
+            "failed",
+            "not_verified",
+            "unavailable"
+        ];
+
+        const safeStatus = allowedStatuses.includes(status)
+            ? status
+            : "unknown";
+
+        statusElement.className =
+            `verification verification-${safeStatus}`;
+
+        statusElement.textContent = safeStatus.replace(/_/g, " ");
+
+        message.textContent =
+            `${result.reason ?? "Verification completed."} ` +
+            `Expected SHA-256: ${result.expected_sha256 ?? "Unavailable"}. ` +
+            `Calculated SHA-256: ${result.calculated_sha256 ?? "Unavailable"}.`;
+
+        // Refresh custody history so the new attempt appears immediately.
+        const custodyButton = card.querySelector('[data-action="custody"]');
+
+        if (custodyButton) {
+            await loadEvidenceCustody(evidenceId, custodyButton);
+        }
+    } catch (error) {
+        console.error("Evidence verification failed:", error);
+        message.textContent =
+            `Could not complete verification: ${error.message}`;
+    } finally {
+        button.disabled = false;
+    }
+}
+
+
+/* =========================
+   LOAD CHAIN OF CUSTODY
+   ========================= */
+
+async function loadEvidenceCustody(evidenceId, button) {
+    const card = button.closest("[data-evidence-card]");
+    if (!card) return;
+
+    const panel = card.querySelector("[data-custody-panel]");
+    const content = card.querySelector("[data-custody-content]");
+
+    panel.open = true;
+    content.textContent = "Loading custody history...";
+    button.disabled = true;
+
+    try {
+        const result = await fetchApi(
+            `/evidence/${encodeURIComponent(evidenceId)}/custody`
+        );
+
+        const entries = result.audit_entries ?? [];
+
+        if (!entries.length) {
+            content.innerHTML = `
+                <p class="empty-state">No custody audit entries found.</p>
+            `;
+            return;
+        }
+
+        content.innerHTML = entries.map(entry => `
+            <article class="custody-entry">
+                <h4>${escapeHtml(entry.action)}</h4>
+                <div class="event-fields">
+                    ${formatField("Audit ID", entry.audit_id)}
+                    ${formatField("Investigator", entry.actor)}
+                    ${formatField(
+                        "Recorded At",
+                        new Date(entry.occurred_at).toLocaleString()
+                    )}
+                </div>
+                <details>
+                    <summary>Audit details</summary>
+                    <pre>${escapeHtml(
+                        JSON.stringify(entry.details ?? {}, null, 2)
+                    )}</pre>
+                </details>
+            </article>
+        `).join("");
+    } catch (error) {
+        console.error("Failed to load custody history:", error);
+        content.textContent =
+            `Could not load custody history: ${error.message}`;
+    } finally {
+        button.disabled = false;
+    }
+}
+
 
 async function loadDashboard() {
     const status = document.querySelector(".status span:last-child");

@@ -400,3 +400,62 @@ def get_chain_of_custody(evidence_id):
 
     finally:
         connection.close()
+
+def record_evidence_verification(evidence_id, actor, result):
+    """
+    Update the current verification status and append a custody
+    audit entry in one database transaction.
+    """
+    occurred_at = datetime.now(timezone.utc).isoformat()
+    audit_id = f"AUD-{uuid4().hex[:12].upper()}"
+
+    details = {
+        "expected_sha256": result.get("expected_sha256"),
+        "calculated_sha256": result.get("calculated_sha256"),
+        "verification_status": result["verification_status"],
+        "reason": result.get("reason"),
+    }
+
+    connection = get_connection()
+
+    try:
+        cursor = connection.execute(
+            """
+            UPDATE evidence
+            SET verification_status = ?
+            WHERE evidence_id = ?
+            """,
+            (result["verification_status"], evidence_id),
+        )
+
+        if cursor.rowcount == 0:
+            raise ValueError("Evidence record does not exist.")
+
+        connection.execute(
+            """
+            INSERT INTO custody_audit (
+                audit_id, evidence_id, action, actor,
+                occurred_at, details_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                audit_id,
+                evidence_id,
+                "integrity_verification",
+                actor,
+                occurred_at,
+                json.dumps(details, sort_keys=True),
+            ),
+        )
+
+        connection.commit()
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
+
+    return get_evidence(evidence_id)

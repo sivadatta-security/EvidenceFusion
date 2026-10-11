@@ -169,3 +169,62 @@ def remove_acquired_file(evidence: dict) -> None:
 
     if candidate.is_file():
         candidate.unlink()
+
+def verify_evidence_integrity(evidence: dict) -> dict:
+    """
+    Recalculate the SHA-256 hash of a managed evidence copy
+    and compare it with the hash stored during acquisition.
+    """
+    expected_hash = evidence.get("sha256")
+    reference = evidence.get("source_reference")
+
+    result = {
+        "evidence_id": evidence.get("evidence_id"),
+        "expected_sha256": expected_hash,
+        "calculated_sha256": None,
+        "verification_status": "unavailable",
+        "reason": None,
+    }
+
+    if not reference:
+        result["reason"] = "Evidence file reference is missing."
+        return result
+
+    candidate = (PROJECT_ROOT / reference).resolve()
+
+    try:
+        candidate.relative_to(EVIDENCE_DIR.resolve())
+    except ValueError:
+        result["verification_status"] = "failed"
+        result["reason"] = "Evidence path is outside managed storage."
+        return result
+
+    if not candidate.is_file():
+        result["reason"] = "Evidence file is missing."
+        return result
+
+    if (
+        evidence.get("hash_algorithm") != "SHA-256"
+        or not expected_hash
+        or len(expected_hash) != 64
+        or any(c not in "0123456789abcdefABCDEF" for c in expected_hash)
+    ):
+        result["reason"] = "A valid stored SHA-256 baseline is unavailable."
+        return result
+
+    try:
+        calculated_hash = sha256_file(candidate)
+    except OSError:
+        result["reason"] = "Evidence file could not be read."
+        return result
+
+    result["calculated_sha256"] = calculated_hash
+
+    if calculated_hash.lower() == expected_hash.lower():
+        result["verification_status"] = "verified"
+        result["reason"] = "Current hash matches the stored acquisition hash."
+    else:
+        result["verification_status"] = "failed"
+        result["reason"] = "Current hash differs from the stored acquisition hash."
+
+    return result

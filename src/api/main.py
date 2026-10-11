@@ -13,6 +13,7 @@ from src.api.database import (
     initialize_database,
     register_acquired_evidence,
     get_chain_of_custody,
+    record_evidence_verification,
 )
 from src.api.models import (
     Event,
@@ -26,6 +27,7 @@ from src.acquisition.service import (
     AcquisitionError,
     INCOMING_DIR,
     remove_acquired_file,
+    verify_evidence_integrity,
 )
 from src.api.timeline import sort_events_by_time
 from src.api.investigation import build_investigation
@@ -467,4 +469,43 @@ def read_evidence_custody(evidence_id: str):
     return {
         "evidence_id": evidence_id,
         "audit_entries": get_chain_of_custody(evidence_id),
+    }
+
+@app.post("/evidence/{evidence_id}/verify")
+def verify_evidence(evidence_id: str, verified_by: str):
+    """Verify an acquired file and record the result in custody history."""
+
+    actor = verified_by.strip()
+
+    if not actor or len(actor) > 128:
+        raise HTTPException(
+            status_code=422,
+            detail="verified_by must contain 1–128 characters.",
+        )
+
+    evidence = get_evidence(evidence_id)
+
+    if evidence is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Evidence '{evidence_id}' not found.",
+        )
+
+    result = verify_evidence_integrity(evidence)
+
+    try:
+        updated_evidence = record_evidence_verification(
+            evidence_id,
+            actor,
+            result,
+        )
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail="The verification result could not be recorded.",
+        ) from error
+
+    return {
+        "evidence": updated_evidence,
+        "verification": result,
     }
