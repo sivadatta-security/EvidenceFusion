@@ -75,3 +75,71 @@ class Event(BaseModel):
     _validate_timestamp = field_validator("timestamp")(
         validate_timestamp
     )
+
+
+from typing import Literal as EvidenceLiteral
+
+from pydantic import ConfigDict, model_validator
+
+
+class EvidenceCreate(BaseModel):
+    """Validated metadata for a digital evidence artifact."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    evidence_id: str = Field(min_length=1, max_length=128)
+    artifact_type: str = Field(min_length=1, max_length=100)
+    source_reference: str = Field(min_length=1, max_length=2048)
+    sha256: str | None = None
+    hash_algorithm: str | None = None
+    acquisition_method: str | None = None
+    acquired_at: str | None = None
+    acquired_by: str | None = None
+    verification_status: EvidenceLiteral[
+        "not_verified",
+        "verified",
+        "failed",
+        "unavailable",
+    ] = "not_verified"
+    metadata: dict = Field(default_factory=dict)
+
+    @field_validator("sha256")
+    @classmethod
+    def validate_sha256(cls, value):
+        if value is not None:
+            import re
+
+            if re.fullmatch(r"[0-9a-fA-F]{64}", value) is None:
+                raise ValueError("sha256 must contain exactly 64 hexadecimal characters")
+
+        return value
+
+    @field_validator("acquired_at")
+    @classmethod
+    def validate_acquired_at(cls, value):
+        if value is not None:
+            return validate_timestamp(value)
+        return value
+
+    @model_validator(mode="after")
+    def validate_hash_metadata(self):
+        if self.sha256 is not None and self.hash_algorithm not in (
+            None,
+            "SHA-256",
+            "sha256",
+        ):
+            raise ValueError("sha256 must use the SHA-256 algorithm")
+        return self
+
+
+class EvidenceLinkCreate(BaseModel):
+    """Describe the relationship between an event and evidence."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    relationship: EvidenceLiteral[
+        "supports",
+        "corroborates",
+        "derived_from",
+        "mentions",
+    ] = "supports"
