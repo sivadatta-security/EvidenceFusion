@@ -11,12 +11,21 @@ from src.api.database import (
     link_event_evidence,
     get_evidence_for_event,
     initialize_database,
+    register_acquired_evidence,
+    get_chain_of_custody,
 )
 from src.api.models import (
     Event,
     EventCreate,
     EvidenceCreate,
     EvidenceLinkCreate,
+    EvidenceAcquisitionRequest,
+)
+from src.acquisition.service import (
+    acquire_file,
+    AcquisitionError,
+    INCOMING_DIR,
+    remove_acquired_file,
 )
 from src.api.timeline import sort_events_by_time
 from src.api.investigation import build_investigation
@@ -382,3 +391,80 @@ def read_incident_evidence(incident_id: str):
         "incident_id": incident_id,
         "evidence": list(evidence_by_id.values()),
          }
+
+
+
+@app.post("/evidence/acquire", status_code=201)
+def acquire_evidence(request: EvidenceAcquisitionRequest):
+    """Acquire a file and register its metadata and custody record."""
+    evidence = None
+
+    try:
+        evidence = acquire_file(
+            source_path=INCOMING_DIR / request.filename,
+            acquired_by=request.acquired_by,
+            artifact_type=request.artifact_type,
+            expected_sha256=request.expected_sha256,
+        )
+
+        try:
+            return register_acquired_evidence(evidence)
+
+        except Exception:
+            # The database registration did not complete.
+            # Remove only the managed copy, never the original source.
+            try:
+                remove_acquired_file(evidence)
+            except OSError:
+                # Preserve the original registration error.
+                pass
+
+            raise
+
+    except AcquisitionError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(error),
+        ) from error
+
+    except sqlite3.IntegrityError as error:
+        if "UNIQUE constraint failed" in str(error):
+            raise HTTPException(
+                status_code=409,
+                detail="An evidence record with this ID already exists.",
+            ) from error
+
+        raise HTTPException(
+            status_code=500,
+            detail="The evidence record could not be saved.",
+        ) from error
+
+    except OSError as error:
+        raise HTTPException(
+            status_code=500,
+            detail="The evidence file could not be acquired or cleaned up.",
+        ) from error
+
+    except Exception as error:
+        raise HTTPException(
+            status_code=500,
+            detail="The evidence record could not be saved.",
+        ) from error
+
+
+
+@app.get("/evidence/{evidence_id}/custody")
+def read_evidence_custody(evidence_id: str):
+    """Return the recorded chain-of-custody history for an evidence item."""
+    evidence = get_evidence(evidence_id)
+
+    if evidence is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Evidence '{evidence_id}' not found.",
+        )
+
+    return {
+        "evidence_id": evidence_id,
+        "audit_entries": get_chain_of_custody(evidence_id),
+    }

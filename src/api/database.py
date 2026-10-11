@@ -2,6 +2,8 @@
 import json
 import sqlite3
 from pathlib import Path
+from uuid import uuid4
+from datetime import datetime, timezone
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -67,7 +69,18 @@ def initialize_database():
                 FOREIGN KEY (evidence_id)
                     REFERENCES evidence(evidence_id) ON DELETE CASCADE
             );
-            """
+
+            CREATE TABLE IF NOT EXISTS custody_audit (
+                audit_id TEXT PRIMARY KEY,
+                evidence_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                actor TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                details_json TEXT NOT NULL DEFAULT '{}',
+                FOREIGN KEY (evidence_id)
+                    REFERENCES evidence(evidence_id) ON DELETE RESTRICT
+            );
+             """
         )
     finally:
         connection.close()
@@ -280,3 +293,110 @@ def get_evidence_for_event(event_id):
 if __name__ == "__main__":
     initialize_database()
     print("EVENTS FOUND:", len(get_events()))
+
+
+def register_acquired_evidence(evidence):
+    """
+    Save acquired evidence and its initial custody audit entry atomically.
+
+    Either both records are committed, or neither is.
+    """
+    connection = get_connection()
+
+    audit_id = f"AUD-{uuid4().hex[:12].upper()}"
+    acquired_at = evidence["acquired_at"]
+
+    details = {
+        "source_reference": evidence["source_reference"],
+        "sha256": evidence["sha256"],
+        "hash_algorithm": evidence["hash_algorithm"],
+        "verification_status": evidence["verification_status"],
+        "acquisition_method": evidence["acquisition_method"],
+    }
+
+    try:
+        connection.execute(
+            """
+            INSERT INTO evidence (
+                evidence_id, artifact_type, source_reference,
+                sha256, hash_algorithm, acquisition_method,
+                acquired_at, acquired_by, verification_status,
+                metadata_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                evidence["evidence_id"],
+                evidence["artifact_type"],
+                evidence["source_reference"],
+                evidence["sha256"],
+                evidence["hash_algorithm"],
+                evidence["acquisition_method"],
+                acquired_at,
+                evidence["acquired_by"],
+                evidence["verification_status"],
+                json.dumps(evidence.get("metadata", {}), sort_keys=True),
+            ),
+        )
+
+        connection.execute(
+            """
+            INSERT INTO custody_audit (
+                audit_id, evidence_id, action, actor,
+                occurred_at, details_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                audit_id,
+                evidence["evidence_id"],
+                "acquisition_completed",
+                evidence["acquired_by"],
+                acquired_at,
+                json.dumps(details, sort_keys=True),
+            ),
+        )
+
+        connection.commit()
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        connection.close()
+
+    return get_evidence(evidence["evidence_id"])
+
+
+def get_chain_of_custody(evidence_id):
+    """Return the recorded custody audit history for one evidence item."""
+    connection = get_connection()
+
+    try:
+        rows = connection.execute(
+            """
+            SELECT
+                audit_id, evidence_id, action, actor,
+                occurred_at, details_json
+            FROM custody_audit
+            WHERE evidence_id = ?
+            ORDER BY occurred_at, audit_id
+            """,
+            (evidence_id,),
+        ).fetchall()
+
+        return [
+            {
+                "audit_id": row[0],
+                "evidence_id": row[1],
+                "action": row[2],
+                "actor": row[3],
+                "occurred_at": row[4],
+                "details": json.loads(row[5]),
+            }
+            for row in rows
+        ]
+
+    finally:
+        connection.close()

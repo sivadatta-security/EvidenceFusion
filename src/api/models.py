@@ -143,3 +143,54 @@ class EvidenceLinkCreate(BaseModel):
         "derived_from",
         "mentions",
     ] = "supports"
+
+
+class EvidenceAcquisitionRequest(BaseModel):
+    """Request to acquire a file already placed in data/incoming."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    filename: str = Field(min_length=1, max_length=255)
+    acquired_by: str = Field(min_length=1, max_length=128)
+    artifact_type: str = Field(default="file", min_length=1, max_length=100)
+    expected_sha256: str | None = None
+
+    @field_validator("filename")
+    @classmethod
+    def validate_filename(cls, value):
+        value = value.strip()
+
+        if (
+            not value
+            or value in {".", ".."}
+            or "/" in value
+            or "\\" in value
+        ):
+            raise ValueError(
+                "filename must be a filename, not a path."
+            )
+
+        return value
+
+    @field_validator("acquired_by", "artifact_type")
+    @classmethod
+    def validate_nonblank_fields(cls, value):
+        if not value.strip():
+            raise ValueError("This field must not be blank.")
+        return value.strip()
+
+    @field_validator("expected_sha256")
+    @classmethod
+    def validate_expected_sha256(cls, value):
+        if value is not None:
+            value = value.strip().lower()
+
+            if (
+                len(value) != 64
+                or any(c not in "0123456789abcdef" for c in value)
+            ):
+                raise ValueError(
+                    "expected_sha256 must contain 64 hexadecimal characters."
+                )
+
+        return value

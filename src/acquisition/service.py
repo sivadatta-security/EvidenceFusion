@@ -143,3 +143,29 @@ def acquire_file(
         if destination.exists():
             destination.unlink()
         raise
+
+
+def remove_acquired_file(evidence: dict) -> None:
+    """
+    Remove a managed copy when its database registration fails.
+
+    Only files inside the managed evidence directory are eligible.
+    The original incoming source is never deleted.
+    """
+    reference = evidence.get("source_reference")
+
+    if not reference:
+        return
+
+    candidate = (PROJECT_ROOT / reference).resolve()
+    managed_directory = EVIDENCE_DIR.resolve()
+
+    try:
+        candidate.relative_to(managed_directory)
+    except ValueError:
+        raise AcquisitionError(
+            "Refusing to remove a file outside managed evidence storage."
+        )
+
+    if candidate.is_file():
+        candidate.unlink()
