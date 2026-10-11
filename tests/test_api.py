@@ -172,3 +172,40 @@ def test_incidents_returns_investigation_results():
         assert "max_correlation_score" in incident
         assert "severity" in incident
         assert "mitre_techniques" in incident
+
+def test_get_incident_by_id():
+    incidents_response = client.get("/incidents")
+
+    assert incidents_response.status_code == 200
+
+    incidents = incidents_response.json()
+
+    if not incidents:
+        return
+
+    incident_id = incidents[0]["incident_id"]
+
+    response = client.get(
+        f"/incidents/{incident_id}"
+    )
+
+    assert response.status_code == 200
+
+    incident = response.json()
+
+    assert incident["incident_id"] == incident_id
+    assert "event_ids" in incident
+    assert "severity" in incident
+    assert "mitre_techniques" in incident
+
+
+def test_get_unknown_incident_returns_not_found():
+    response = client.get(
+        "/incidents/INC999999"
+    )
+
+    assert response.status_code == 404
+
+    assert response.json() == {
+        "detail": "Incident 'INC999999' not found."
+    }

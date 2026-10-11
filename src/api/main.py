@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.database import get_events, insert_event
 from src.api.models import Event, EventCreate
@@ -10,6 +11,17 @@ app = FastAPI(
     title="EvidenceFusion API",
     description="Backend API for the EvidenceFusion DFIR investigation platform.",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5500",
+        "http://localhost:5500",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -140,3 +152,42 @@ def read_incidents():
         )
 
     return build_investigation(events)
+
+@app.get("/incidents/{incident_id}")
+def read_incident(incident_id: str):
+    """
+    Return a single investigation by incident ID.
+    """
+    rows = get_events()
+
+    events = []
+
+    for row in rows:
+        events.append(
+            {
+                "event_id": row[0],
+                "timestamp": row[1],
+                "source": row[2],
+                "event_type": row[3],
+                "user": row[4],
+                "host": row[5],
+                "source_ip": row[6],
+                "destination_ip": row[7],
+                "domain": row[8],
+                "artifact": row[9],
+                "hash": row[10],
+                "description": row[11],
+                "confidence": row[12],
+            }
+        )
+
+    investigations = build_investigation(events)
+
+    for incident in investigations:
+        if incident["incident_id"] == incident_id:
+            return incident
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Incident '{incident_id}' not found.",
+    )
