@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>EvidenceFusion | DFIR Investigation Platform</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+</head>
+
+<body>
+
+    <header class="topbar">
+
+        <div class="brand">
+            <h1>EvidenceFusion</h1>
+            <p>DFIR Investigation Platform</p>
+        </div>
+
+        <div class="status">
+            <span class="status-dot"></span>
+            <span>System Ready</span>
+        </div>
+
+    </header>
+
+
+    <main class="dashboard">
+
+        <!-- Summary Cards -->
+
+        <section class="summary-grid">
+
+            <div class="summary-card">
+                <p class="card-label">Total Incidents</p>
+                <h2 id="incident-count">0</h2>
+            </div>
+
+            <div class="summary-card high-card">
+                <p class="card-label">High Severity</p>
+                <h2 id="high-count">0</h2>
+            </div>
+
+            <div class="summary-card">
+                <p class="card-label">Total Events</p>
+                <h2 id="event-count">0</h2>
+            </div>
+
+            <div class="summary-card">
+                <p class="card-label">MITRE Techniques</p>
+                <h2 id="technique-count">0</h2>
+            </div>
+
+        </section>
+
+
+        <!-- Investigation Timeline -->
+
+        <section class="panel">
+
+            <div class="panel-header">
+                <div>
+                    <h2>Investigation Timeline</h2>
+                    <p>
+                        Chronological view of collected evidence
+                    </p>
+                </div>
+            </div>
+
+            <div
+                id="timeline"
+                class="timeline"
+            >
+
+                <div class="empty-state">
+                    No investigation data loaded.
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- Incidents -->
+
+        <section class="panel">
+
+            <div class="panel-header">
+
+                <div>
+                    <h2>Active Incidents</h2>
+                    <p>
+                        Correlated evidence grouped into incidents
+                    </p>
+                </div>
+
+            </div>
+
+            <div
+                id="incidents"
+                class="incident-list"
+            >
+
+                <div class="empty-state">
+                    No incidents loaded.
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- MITRE ATT&CK -->
+
+        <section class="panel">
+
+            <div class="panel-header">
+
+                <div>
+                    <h2>MITRE ATT&CK</h2>
+                    <p>
+                        Techniques identified from correlated evidence
+                    </p>
+                </div>
+
+            </div>
+
+            <div
+                id="mitre-techniques"
+                class="technique-list"
+            >
+
+                <div class="empty-state">
+                    No techniques loaded.
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <footer class="footer">
+
+        <p>
+            EvidenceFusion &mdash;
+            Automated Multi-Source Digital Evidence
+            Correlation for DFIR Investigations
+        </p>
+
+    </footer>
+
+
+    <script src="app.js"></script>
+
+</body>
+</html>
