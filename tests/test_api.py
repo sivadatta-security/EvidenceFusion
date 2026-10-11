@@ -302,3 +302,79 @@ def test_unknown_evidence_returns_not_found():
     response = client.get("/evidence/UNKNOWN_EVIDENCE_ID")
 
     assert response.status_code == 404
+
+
+def test_incident_evidence_returns_linked_evidence():
+    suffix = uuid4().hex
+
+    event_one = make_api_event()
+    event_one.update({
+        "event_id": f"INC_EVIDENCE_A_{suffix}",
+        "user": f"incident_user_{suffix}",
+        "timestamp": "2026-09-01T10:40:00Z",
+    })
+
+    event_two = make_api_event()
+    event_two.update({
+        "event_id": f"INC_EVIDENCE_B_{suffix}",
+        "user": f"incident_user_{suffix}",
+        "timestamp": "2026-09-01T10:41:00Z",
+    })
+
+    evidence = make_api_evidence()
+
+    assert client.post("/events", json=event_one).status_code == 201
+    assert client.post("/events", json=event_two).status_code == 201
+    assert client.post("/evidence", json=evidence).status_code == 201
+
+    for event in (event_one, event_two):
+        response = client.post(
+            f"/events/{event['event_id']}/evidence/"
+            f"{evidence['evidence_id']}",
+            json={"relationship": "supports"},
+        )
+        assert response.status_code == 201
+
+    incidents_response = client.get("/incidents")
+    assert incidents_response.status_code == 200
+
+    incident = next(
+        (
+            item for item in incidents_response.json()
+            if event_one["event_id"] in item["event_ids"]
+            and event_two["event_id"] in item["event_ids"]
+        ),
+        None,
+    )
+    assert incident is not None
+
+    response = client.get(
+        f"/incidents/{incident['incident_id']}/evidence"
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["incident_id"] == incident["incident_id"]
+
+    matching = [
+        item for item in result["evidence"]
+        if item["evidence_id"] == evidence["evidence_id"]
+    ]
+    assert len(matching) == 1
+
+    linked_event_ids = {
+        link["event_id"]
+        for link in matching[0]["event_links"]
+    }
+    assert linked_event_ids == {
+        event_one["event_id"],
+        event_two["event_id"],
+    }
+
+
+def test_incident_evidence_unknown_incident_returns_not_found():
+    response = client.get(
+        "/incidents/INC_DOES_NOT_EXIST/evidence"
+    )
+
+    assert response.status_code == 404

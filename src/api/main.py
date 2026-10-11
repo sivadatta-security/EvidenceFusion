@@ -311,3 +311,74 @@ def read_event_evidence(event_id: str):
         )
 
     return get_evidence_for_event(event_id)
+
+
+@app.get("/incidents/{incident_id}/evidence")
+def read_incident_evidence(incident_id: str):
+    """Return unique evidence records linked to an incident's events."""
+    rows = get_events()
+
+    events = [
+        {
+            "event_id": row[0],
+            "timestamp": row[1],
+            "source": row[2],
+            "event_type": row[3],
+            "user": row[4],
+            "host": row[5],
+            "source_ip": row[6],
+            "destination_ip": row[7],
+            "domain": row[8],
+            "artifact": row[9],
+            "hash": row[10],
+            "description": row[11],
+            "confidence": row[12],
+        }
+        for row in rows
+    ]
+
+    incidents = build_investigation(events)
+
+    incident = next(
+        (
+            item for item in incidents
+            if item["incident_id"] == incident_id
+        ),
+        None,
+    )
+
+    if incident is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Incident '{incident_id}' not found.",
+        )
+
+    evidence_by_id = {}
+
+    for event_id in incident["event_ids"]:
+        linked_evidence = get_evidence_for_event(event_id)
+
+        for record in linked_evidence:
+            evidence_id = record["evidence_id"]
+
+            if evidence_id not in evidence_by_id:
+                evidence_by_id[evidence_id] = {
+                    key: value
+                    for key, value in record.items()
+                    if key != "relationship"
+                }
+                evidence_by_id[evidence_id]["event_links"] = []
+
+            evidence_by_id[evidence_id]["event_links"].append(
+                {
+                    "event_id": event_id,
+                    "relationship": record.get(
+                        "relationship", "supports"
+                    ),
+                }
+            )
+
+    return {
+        "incident_id": incident_id,
+        "evidence": list(evidence_by_id.values()),
+         }
