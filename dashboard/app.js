@@ -22,8 +22,17 @@ async function loadEvents() {
     return fetchApi("/events");
 }
 
-async function loadTimeline() {
-    return fetchApi("/timeline");
+async function loadTimeline(filters = {}) {
+    const params = new URLSearchParams();
+
+    if (filters.user) params.set("user", filters.user);
+    if (filters.host) params.set("host", filters.host);
+    if (filters.source) params.set("source", filters.source);
+    if (filters.start_time) params.set("start_time", filters.start_time);
+    if (filters.end_time) params.set("end_time", filters.end_time);
+
+    const query = params.toString();
+    return fetchApi(`/timeline${query ? `?${query}` : ""}`);
 }
 
 async function loadIncidents(filters = {}) {
@@ -894,8 +903,82 @@ function setupIncidentFilters() {
 }
 
 /* =========================
+   TIMELINE FILTERS
+   ========================= */
+
+function readTimelineFilters() {
+    const value = id => document.getElementById(id).value.trim();
+
+    function toUtcTimestamp(id) {
+        const raw = value(id);
+        if (!raw) return "";
+
+        const date = new Date(raw);
+        if (Number.isNaN(date.getTime())) {
+            throw new Error("Enter a valid start and end date/time.");
+        }
+
+        return date.toISOString();
+    }
+
+    return {
+        user: value("timeline-filter-user"),
+        host: value("timeline-filter-host"),
+        source: value("timeline-filter-source"),
+        start_time: toUtcTimestamp("timeline-filter-start"),
+        end_time: toUtcTimestamp("timeline-filter-end")
+    };
+}
+
+async function applyTimelineFilters() {
+    const status = document.getElementById("timeline-filter-status");
+    const container = document.getElementById("timeline");
+
+    try {
+        const filters = readTimelineFilters();
+
+        if (
+            filters.start_time &&
+            filters.end_time &&
+            new Date(filters.start_time) > new Date(filters.end_time)
+        ) {
+            throw new Error("Start time must be earlier than or equal to end time.");
+        }
+
+        status.textContent = "Applying timeline filters...";
+        const events = await loadTimeline(filters);
+        renderTimeline(events);
+        status.textContent = `${events.length} event(s) match the selected filters.`;
+    } catch (error) {
+        console.error("Failed to filter timeline:", error);
+        status.textContent = `Filter request failed: ${error.message}`;
+
+        if (error.message.includes("422")) {
+            status.textContent += " Check the selected time range and filter values.";
+        }
+    }
+}
+
+function setupTimelineFilters() {
+    const form = document.getElementById("timeline-filters");
+    const resetButton = document.getElementById("reset-timeline-filters");
+
+    if (!form || !resetButton) return;
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+        await applyTimelineFilters();
+    });
+
+    resetButton.addEventListener("click", async () => {
+        form.reset();
+        await applyTimelineFilters();
+    });
+}
+/* =========================
    INITIALIZE DASHBOARD
    ========================= */
 
+setupTimelineFilters();
 setupIncidentFilters();
 loadDashboard();

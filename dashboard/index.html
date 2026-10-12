@@ -45,6 +45,45 @@
                     <p>Chronological view of collected evidence</p>
                 </div>
             </div>
+            <form id="timeline-filters" class="incident-filters timeline-filters">
+                <label>
+                    <span>User</span>
+                    <input id="timeline-filter-user" name="user" type="text"
+                           placeholder="Filter by user">
+                </label>
+                <label>
+                    <span>Host</span>
+                    <input id="timeline-filter-host" name="host" type="text"
+                           placeholder="Filter by host">
+                </label>
+                <label>
+                    <span>Source</span>
+                    <select id="timeline-filter-source" name="source">
+                        <option value="">All sources</option>
+                        <option value="system">System</option>
+                        <option value="network">Network</option>
+                        <option value="email">Email</option>
+                        <option value="incident_response">Incident response</option>
+                    </select>
+                </label>
+                <label>
+                    <span>Start time</span>
+                    <input id="timeline-filter-start" name="start_time"
+                           type="datetime-local">
+                </label>
+                <label>
+                    <span>End time</span>
+                    <input id="timeline-filter-end" name="end_time"
+                           type="datetime-local">
+                </label>
+                <div class="filter-actions">
+                    <button type="submit" class="filter-button">Apply filters</button>
+                    <button type="button" id="reset-timeline-filters"
+                            class="filter-button secondary">Reset</button>
+                </div>
+                <p id="timeline-filter-status" class="filter-status"
+                   aria-live="polite"></p>
+            </form>
             <div id="timeline" class="timeline">
                 <div class="empty-state">No investigation data loaded.</div>
             </div>
