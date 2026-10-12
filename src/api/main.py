@@ -236,12 +236,64 @@ def read_timeline(
     )
 
 
-@app.get("/incidents")
-def read_incidents():
-    """Return structured investigation results."""
-    events = [_event_dict_from_row(row) for row in get_events()]
-    return build_investigation(events)
 
+@app.get("/incidents")
+def read_incidents(
+    severity: str | None = Query(
+        default=None,
+        pattern="^(High|Medium|Low)$",
+    ),
+    source: str | None = Query(default=None, min_length=1),
+    min_events: int = Query(default=1, ge=1),
+):
+    """Return investigation results with optional filters."""
+    events = [_event_dict_from_row(row) for row in get_events()]
+    incidents = build_investigation(events)
+
+    filtered_incidents = []
+
+    for incident in incidents:
+        if severity is not None and incident["severity"] != severity:
+            continue
+
+        if source is not None and source not in incident["sources"]:
+            continue
+
+        if incident["event_count"] < min_events:
+            continue
+
+        filtered_incidents.append(incident)
+
+    return filtered_incidents
+
+
+@app.get("/dashboard/summary")
+def read_dashboard_summary():
+    """Return high-level incident and event metrics for a dashboard."""
+    events = [_event_dict_from_row(row) for row in get_events()]
+    incidents = build_investigation(events)
+
+    severity_counts = {
+        "High": 0,
+        "Medium": 0,
+        "Low": 0,
+    }
+    source_counts = {}
+
+    for incident in incidents:
+        severity = incident.get("severity")
+        if severity in severity_counts:
+            severity_counts[severity] += 1
+
+        for source in incident.get("sources", []):
+            source_counts[source] = source_counts.get(source, 0) + 1
+
+    return {
+        "total_incidents": len(incidents),
+        "total_events": len(events),
+        "severity_counts": severity_counts,
+        "source_counts": dict(sorted(source_counts.items())),
+    }
 
 @app.get("/incidents/{incident_id}")
 def read_incident(incident_id: str):

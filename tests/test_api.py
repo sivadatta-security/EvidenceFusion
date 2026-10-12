@@ -380,3 +380,54 @@ def test_incident_evidence_unknown_incident_returns_not_found():
     )
 
     assert response.status_code == 404
+
+
+def test_incident_filter_rejects_invalid_severity():
+    response = client.get("/incidents?severity=Critical")
+
+    assert response.status_code == 422
+
+
+def test_incident_filter_min_events():
+    response = client.get("/incidents?min_events=2")
+
+    assert response.status_code == 200
+    assert all(
+        incident["event_count"] >= 2
+        for incident in response.json()
+    )
+
+
+def test_incident_filter_source():
+    response = client.get("/incidents?source=network")
+
+    assert response.status_code == 200
+    assert all(
+        "network" in incident["sources"]
+        for incident in response.json()
+    )
+
+
+def test_dashboard_summary_structure():
+    response = client.get("/dashboard/summary")
+
+    assert response.status_code == 200
+    summary = response.json()
+
+    assert isinstance(summary["total_incidents"], int)
+    assert isinstance(summary["total_events"], int)
+    assert set(summary["severity_counts"]) == {
+        "High",
+        "Medium",
+        "Low",
+    }
+    assert isinstance(summary["source_counts"], dict)
+
+
+def test_dashboard_summary_counts_are_consistent():
+    summary = client.get("/dashboard/summary").json()
+
+    assert summary["total_incidents"] == sum(
+        summary["severity_counts"].values()
+    )
+    assert summary["total_events"] >= 0
