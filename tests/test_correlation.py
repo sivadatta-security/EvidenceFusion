@@ -1,3 +1,4 @@
+
 from src.correlation.engine import (
     compare_events,
     correlate_events,
@@ -28,7 +29,6 @@ def test_events_correlate_by_user_host_domain_and_time():
     result = compare_events(event_a, event_b)
 
     assert result["score"] == 7
-
     assert result["reasons"] == [
         "same_user",
         "same_host",
@@ -124,9 +124,7 @@ def test_correlate_events_does_not_create_relationship_for_time_only():
         },
     ]
 
-    relationships = correlate_events(events)
-
-    assert relationships == []
+    assert correlate_events(events) == []
 
 
 def test_build_incident_clusters_groups_connected_events():
@@ -249,10 +247,7 @@ def test_summarize_incident():
 
     incidents = create_incidents(events)
 
-    summary = summarize_incident(
-        incidents[0],
-        events,
-    )
+    summary = summarize_incident(incidents[0], events)
 
     assert summary["event_count"] == 2
     assert summary["first_seen"] == "2026-09-01T10:30:00+00:00"
@@ -282,3 +277,71 @@ def test_classify_severity():
     assert classify_severity(6) == "High"
     assert classify_severity(7) == "High"
     assert classify_severity(10) == "High"
+
+
+def test_shared_user_and_close_time_alone_do_not_correlate():
+    events = [
+        {
+            "event_id": "EVT101",
+            "timestamp": "2026-09-01T10:30:00Z",
+            "user": "shared_user",
+            "host": "HOST_A",
+        },
+        {
+            "event_id": "EVT102",
+            "timestamp": "2026-09-01T10:31:00Z",
+            "user": "shared_user",
+            "host": "HOST_B",
+        },
+    ]
+
+    # Same user contributes 2 points and close time contributes 1.
+    # The score of 3 is below the correlation threshold of 4.
+    assert correlate_events(events) == []
+
+
+def test_compare_events_handles_missing_or_invalid_timestamps():
+    invalid_timestamps = [
+        None,
+        "",
+        "not-a-timestamp",
+        "2026-09-01T10:30:00",
+    ]
+
+    for timestamp in invalid_timestamps:
+        event_a = {
+            "event_id": "EVT201",
+            "timestamp": timestamp,
+        }
+        event_b = {
+            "event_id": "EVT202",
+            "timestamp": "2026-09-01T10:31:00Z",
+        }
+
+        result = compare_events(event_a, event_b)
+
+        assert result["score"] == 0
+        assert result["reasons"] == []
+
+
+def test_summarize_incident_handles_invalid_timestamps():
+    events = [
+        {
+            "event_id": "EVT301",
+            "timestamp": "invalid-timestamp",
+            "source": "system",
+            "event_type": "unknown_activity",
+        }
+    ]
+
+    incident = {
+        "incident_id": "INC001",
+        "event_ids": ["EVT301"],
+    }
+
+    summary = summarize_incident(incident, events)
+
+    assert summary["event_count"] == 1
+    assert summary["first_seen"] is None
+    assert summary["last_seen"] is None
+    assert summary["relationship_count"] == 0

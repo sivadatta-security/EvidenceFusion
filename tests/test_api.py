@@ -309,17 +309,19 @@ def test_incident_evidence_returns_linked_evidence():
 
     event_one = make_api_event()
     event_one.update({
-        "event_id": f"INC_EVIDENCE_A_{suffix}",
-        "user": f"incident_user_{suffix}",
-        "timestamp": "2026-09-01T10:40:00Z",
-    })
+    "event_id": f"INC_EVIDENCE_A_{suffix}",
+    "user": f"incident_user_{suffix}",
+    "host": f"INCIDENT_HOST_{suffix}",
+    "timestamp": "2026-09-01T10:40:00Z",
+})
 
     event_two = make_api_event()
     event_two.update({
-        "event_id": f"INC_EVIDENCE_B_{suffix}",
-        "user": f"incident_user_{suffix}",
-        "timestamp": "2026-09-01T10:41:00Z",
-    })
+    "event_id": f"INC_EVIDENCE_B_{suffix}",
+    "user": f"incident_user_{suffix}",
+    "host": f"INCIDENT_HOST_{suffix}",
+    "timestamp": "2026-09-01T10:41:00Z",
+     })
 
     evidence = make_api_evidence()
 

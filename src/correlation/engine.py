@@ -1,11 +1,12 @@
+
 from datetime import datetime, timedelta
 
 from src.mitre.mapping import map_incident_to_mitre
 
 
-# Initial correlation configuration.
+# Correlation configuration.
 TIME_WINDOW_MINUTES = 5
-CORRELATION_THRESHOLD = 3
+CORRELATION_THRESHOLD = 4
 
 CORRELATION_WEIGHTS = {
     "same_user": 2,
@@ -19,17 +20,34 @@ CORRELATION_WEIGHTS = {
 
 
 def parse_timestamp(timestamp):
-    """Convert an ISO 8601 timestamp into a timezone-aware datetime."""
-    return datetime.fromisoformat(
-        timestamp.replace("Z", "+00:00")
-    )
+    """Parse a timezone-aware ISO 8601 timestamp safely.
+
+    Return None if the timestamp is missing, malformed,
+    or does not contain a timezone.
+    """
+    if not isinstance(timestamp, str) or not timestamp.strip():
+        return None
+
+    try:
+        parsed = datetime.fromisoformat(
+            timestamp.replace("Z", "+00:00")
+        )
+    except ValueError:
+        return None
+
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+
+    return parsed
 
 
 def compare_events(event_a, event_b):
     """
-    Compare two normalized events and calculate their correlation score.
+    Compare two normalized events and calculate their
+    correlation score.
 
     Returns the score and the reasons that contributed to it.
+    Invalid timestamps do not contribute a time score.
     """
     score = 0
     reasons = []
@@ -77,20 +95,22 @@ def compare_events(event_a, event_b):
         score += CORRELATION_WEIGHTS["same_hash"]
         reasons.append("same_hash")
 
-    timestamp_a = parse_timestamp(event_a["timestamp"])
-    timestamp_b = parse_timestamp(event_b["timestamp"])
+    # Keep timestamp parsing outside all attribute-matching blocks.
+    timestamp_a = parse_timestamp(event_a.get("timestamp"))
+    timestamp_b = parse_timestamp(event_b.get("timestamp"))
 
-    time_difference = abs(timestamp_a - timestamp_b)
+    if timestamp_a is not None and timestamp_b is not None:
+        time_difference = abs(timestamp_a - timestamp_b)
 
-    if time_difference <= timedelta(
-        minutes=TIME_WINDOW_MINUTES
-    ):
-        score += CORRELATION_WEIGHTS["close_in_time"]
-        reasons.append("close_in_time")
+        if time_difference <= timedelta(
+            minutes=TIME_WINDOW_MINUTES
+        ):
+            score += CORRELATION_WEIGHTS["close_in_time"]
+            reasons.append("close_in_time")
 
     return {
-        "event_a": event_a["event_id"],
-        "event_b": event_b["event_id"],
+        "event_a": event_a.get("event_id"),
+        "event_b": event_b.get("event_id"),
         "score": score,
         "reasons": reasons,
     }
@@ -118,29 +138,34 @@ def build_incident_clusters(events):
     Build incident clusters from correlated event relationships.
 
     Events connected through qualifying relationships are grouped
-    into the same incident cluster.
+    into the same incident cluster. Unconnected events remain
+    individual clusters.
     """
     relationships = correlate_events(events)
 
     adjacency = {}
 
     for event in events:
-        adjacency[event["event_id"]] = set()
+        event_id = event.get("event_id")
+
+        if event_id is not None:
+            adjacency.setdefault(event_id, set())
 
     for relationship in relationships:
         event_a = relationship["event_a"]
         event_b = relationship["event_b"]
 
-        adjacency[event_a].add(event_b)
-        adjacency[event_b].add(event_a)
+        if event_a in adjacency and event_b in adjacency:
+            adjacency[event_a].add(event_b)
+            adjacency[event_b].add(event_a)
 
     visited = set()
     clusters = []
 
     for event in events:
-        event_id = event["event_id"]
+        event_id = event.get("event_id")
 
-        if event_id in visited:
+        if event_id is None or event_id in visited:
             continue
 
         cluster = []
@@ -155,7 +180,7 @@ def build_incident_clusters(events):
             visited.add(current)
             cluster.append(current)
 
-            for neighbor in adjacency[current]:
+            for neighbor in adjacency.get(current, set()):
                 if neighbor not in visited:
                     stack.append(neighbor)
 
@@ -165,9 +190,7 @@ def build_incident_clusters(events):
 
 
 def create_incidents(events):
-    """
-    Convert incident clusters into structured incident records.
-    """
+    """Convert incident clusters into structured incident records."""
     clusters = build_incident_clusters(events)
 
     incidents = []
@@ -184,23 +207,26 @@ def create_incidents(events):
 
 
 def summarize_incident(incident, events):
-    """
-    Add investigation-focused summary information to an incident.
-    """
+    """Add investigation-focused summary information to an incident."""
     event_map = {
         event["event_id"]: event
         for event in events
+        if event.get("event_id") is not None
     }
 
     incident_events = [
         event_map[event_id]
-        for event_id in incident["event_ids"]
+        for event_id in incident.get("event_ids", [])
         if event_id in event_map
     ]
 
+    # Ignore malformed timestamps when calculating the timeline.
     timestamps = [
-        parse_timestamp(event["timestamp"])
+        parsed
         for event in incident_events
+        if (
+            parsed := parse_timestamp(event.get("timestamp"))
+        ) is not None
     ]
 
     sources = sorted(
@@ -238,9 +264,7 @@ def summarize_incident(incident, events):
         "sources": sources,
         "relationship_count": len(relationships),
         "max_correlation_score": max_correlation_score,
-        "severity": classify_severity(
-            max_correlation_score
-        ),
+        "severity": classify_severity(max_correlation_score),
         "mitre_techniques": mitre_mapping["techniques"],
     }
 
