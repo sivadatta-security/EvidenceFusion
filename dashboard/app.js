@@ -1,4 +1,3 @@
-
 const API_BASE_URL = "http://127.0.0.1:8000";
 
 /* =========================
@@ -27,20 +26,26 @@ async function loadTimeline() {
     return fetchApi("/timeline");
 }
 
-async function loadIncidents() {
-    return fetchApi("/incidents");
+async function loadIncidents(filters = {}) {
+    const params = new URLSearchParams();
+
+    if (filters.severity) params.set("severity", filters.severity);
+    if (filters.source) params.set("source", filters.source);
+    if (filters.min_events) params.set("min_events", filters.min_events);
+
+    const query = params.toString();
+    return fetchApi(`/incidents${query ? `?${query}` : ""}`);
 }
 
 /* =========================
    SUMMARY CARDS
    ========================= */
 
-function updateSummary(events, incidents) {
-    const incidentCount = incidents.length;
+function updateSummary(events, incidents, summary = null) {
+    const incidentCount = summary?.total_incidents ?? incidents.length;
 
-    const highCount = incidents.filter(
-        incident => incident.severity === "High"
-    ).length;
+    const highCount = summary?.severity_counts?.High ??
+        incidents.filter(incident => incident.severity === "High").length;
 
     const techniqueIds = new Set();
 
@@ -59,7 +64,7 @@ function updateSummary(events, incidents) {
         highCount;
 
     document.getElementById("event-count").textContent =
-        events.length;
+        summary?.total_events ?? events.length;
 
     document.getElementById("technique-count").textContent =
         techniqueIds.size;
@@ -522,13 +527,14 @@ async function loadDashboard() {
     const status = document.querySelector(".status span:last-child");
 
     try {
-        const [events, timeline, incidents] = await Promise.all([
+        const [events, timeline, incidents, summary] = await Promise.all([
             loadEvents(),
             loadTimeline(),
-            loadIncidents()
+            loadIncidents(),
+            fetchApi("/dashboard/summary")
         ]);
 
-        updateSummary(events, incidents);
+        updateSummary(events, incidents, summary);
         renderTimeline(timeline);
         renderIncidents(incidents);
         renderMitreTechniques(incidents);
@@ -824,7 +830,72 @@ function closeIncidentDetails() {
 }
 
 /* =========================
+   INCIDENT FILTERS
+   ========================= */
+
+function readIncidentFilters() {
+    const severity = document.getElementById("filter-severity").value;
+    const source = document.getElementById("filter-source").value.trim();
+    const minEvents = document.getElementById("filter-min-events").value;
+
+    return {
+        severity,
+        source,
+        min_events: minEvents || "1"
+    };
+}
+
+async function applyIncidentFilters() {
+    const container = document.getElementById("incidents");
+    const filterStatus = document.getElementById("incident-filter-status");
+
+    container.innerHTML = '<div class="empty-state">Loading filtered incidents...</div>';
+    filterStatus.textContent = "Applying filters...";
+
+    try {
+        const incidents = await loadIncidents(readIncidentFilters());
+        renderIncidents(incidents);
+        filterStatus.textContent = `${incidents.length} incident(s) match the selected filters.`;
+    } catch (error) {
+        console.error("Failed to filter incidents:", error);
+        container.innerHTML = `
+            <div class="empty-state">
+                Could not load filtered incidents. Check the API connection and try again.
+            </div>
+        `;
+        filterStatus.textContent = `Filter request failed: ${error.message}`;
+    }
+}
+
+function setupIncidentFilters() {
+    const form = document.getElementById("incident-filters");
+    const resetButton = document.getElementById("reset-incident-filters");
+
+    if (!form || !resetButton) return;
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+
+        const minEvents = Number(document.getElementById("filter-min-events").value);
+        if (!Number.isInteger(minEvents) || minEvents < 1) {
+            document.getElementById("incident-filter-status").textContent =
+                "Minimum events must be a whole number greater than or equal to 1.";
+            return;
+        }
+
+        await applyIncidentFilters();
+    });
+
+    resetButton.addEventListener("click", async () => {
+        form.reset();
+        document.getElementById("filter-min-events").value = "1";
+        await applyIncidentFilters();
+    });
+}
+
+/* =========================
    INITIALIZE DASHBOARD
    ========================= */
 
+setupIncidentFilters();
 loadDashboard();

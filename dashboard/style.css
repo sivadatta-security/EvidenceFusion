@@ -769,3 +769,107 @@ textarea {
     overflow-wrap: anywhere;
     font-size: 0.85rem;
 }
+
+/* =========================
+   INCIDENT FILTER CONTROLS
+   ========================= */
+
+.incident-filters {
+    display: grid;
+    grid-template-columns: minmax(150px, 0.8fr) minmax(180px, 1.2fr) minmax(130px, 0.7fr) auto;
+    align-items: end;
+    gap: 14px;
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(23, 32, 51, 0.45);
+}
+
+.incident-filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.incident-filters input,
+.incident-filters select {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 11px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    outline: none;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+}
+
+.incident-filters input:focus,
+.incident-filters select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.12);
+}
+
+.filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.filter-button {
+    padding: 10px 12px;
+    border: 1px solid var(--accent);
+    border-radius: 7px;
+    background: rgba(56, 189, 248, 0.12);
+    color: #7dd3fc;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.filter-button:hover {
+    background: rgba(56, 189, 248, 0.2);
+}
+
+.filter-button.secondary {
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--text);
+}
+
+.filter-status {
+    grid-column: 1 / -1;
+    min-height: 18px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+    .incident-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .filter-actions {
+        align-self: end;
+    }
+}
+
+@media (max-width: 600px) {
+    .incident-filters {
+        grid-template-columns: 1fr;
+        padding: 16px;
+    }
+
+    .filter-actions {
+        width: 100%;
+    }
+
+    .filter-button {
+        flex: 1;
+    }
+}
