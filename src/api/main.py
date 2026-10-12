@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
 
 import sqlite3
+from datetime import datetime
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.database import (
     get_events,
@@ -29,7 +31,7 @@ from src.acquisition.service import (
     remove_acquired_file,
     verify_evidence_integrity,
 )
-from src.api.timeline import sort_events_by_time
+from src.api.timeline import sort_events_by_time, parse_event_timestamp
 from src.api.investigation import build_investigation
 
 
@@ -53,6 +55,124 @@ app.add_middleware(
 )
 
 
+def _event_from_row(row):
+    """Convert a database event row to the API event model."""
+    return Event(
+        event_id=row[0],
+        timestamp=row[1],
+        source=row[2],
+        event_type=row[3],
+        user=row[4],
+        host=row[5],
+        source_ip=row[6],
+        destination_ip=row[7],
+        domain=row[8],
+        artifact=row[9],
+        hash=row[10],
+        description=row[11],
+        confidence=row[12],
+    )
+
+
+def _event_dict_from_row(row):
+    """Convert a database event row to an investigation dictionary."""
+    return {
+        "event_id": row[0],
+        "timestamp": row[1],
+        "source": row[2],
+        "event_type": row[3],
+        "user": row[4],
+        "host": row[5],
+        "source_ip": row[6],
+        "destination_ip": row[7],
+        "domain": row[8],
+        "artifact": row[9],
+        "hash": row[10],
+        "description": row[11],
+        "confidence": row[12],
+    }
+
+
+def _parse_filter_timestamp(value, parameter_name):
+    """Validate and parse an ISO 8601 filter timestamp."""
+    if value is None:
+        return None
+
+    parsed = parse_event_timestamp(value)
+
+    if parsed is None or not value.strip():
+        raise HTTPException(
+            status_code=422,
+            detail=f"{parameter_name} must be a valid ISO 8601 timestamp.",
+        )
+
+    # Filter timestamps must include an explicit timezone.
+    try:
+        raw = value.strip()
+        if raw.endswith("Z"):
+            raw = raw[:-1] + "+00:00"
+        original = datetime.fromisoformat(raw)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{parameter_name} must be a valid ISO 8601 timestamp.",
+        ) from error
+
+    if original.tzinfo is None or original.utcoffset() is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{parameter_name} must include a timezone.",
+        )
+
+    return parsed
+
+
+def _get_timeline_events(
+    user=None,
+    host=None,
+    source=None,
+    start_time=None,
+    end_time=None,
+):
+    """Filter and sort events without changing the database."""
+    events = [_event_from_row(row).model_dump() for row in get_events()]
+
+    start = _parse_filter_timestamp(start_time, "start_time")
+    end = _parse_filter_timestamp(end_time, "end_time")
+
+    if start is not None and end is not None and start > end:
+        raise HTTPException(
+            status_code=422,
+            detail="start_time must be earlier than or equal to end_time.",
+        )
+
+    filtered = []
+
+    for event in events:
+        if user is not None and event.get("user") != user:
+            continue
+
+        if host is not None and event.get("host") != host:
+            continue
+
+        if source is not None and event.get("source") != source:
+            continue
+
+        timestamp = parse_event_timestamp(event.get("timestamp"))
+
+        if start is not None:
+            if timestamp is None or timestamp < start:
+                continue
+
+        if end is not None:
+            if timestamp is None or timestamp > end:
+                continue
+
+        filtered.append(event)
+
+    return sort_events_by_time(filtered)
+
+
 @app.get("/")
 def root():
     """Return basic information about the EvidenceFusion API."""
@@ -66,38 +186,13 @@ def root():
 @app.get("/health")
 def health_check():
     """Check whether the API is healthy."""
-    return {
-        "status": "healthy"
-    }
+    return {"status": "healthy"}
 
 
 @app.get("/events", response_model=list[Event])
 def read_events():
     """Return all normalized events stored in the database."""
-    rows = get_events()
-
-    events = []
-
-    for row in rows:
-        events.append(
-            Event(
-                event_id=row[0],
-                timestamp=row[1],
-                source=row[2],
-                event_type=row[3],
-                user=row[4],
-                host=row[5],
-                source_ip=row[6],
-                destination_ip=row[7],
-                domain=row[8],
-                artifact=row[9],
-                hash=row[10],
-                description=row[11],
-                confidence=row[12],
-            )
-        )
-
-    return events
+    return [_event_from_row(row) for row in get_events()]
 
 
 @app.post("/events", response_model=Event, status_code=201)
@@ -110,105 +205,48 @@ def create_event(event: EventCreate):
             raise HTTPException(
                 status_code=409,
                 detail=f"Event with ID '{event.event_id}' already exists.",
-            )
+            ) from error
 
         raise HTTPException(
             status_code=500,
             detail="Failed to store event.",
-        )
+        ) from error
 
     return Event(**event.model_dump())
 
+
 @app.get("/timeline", response_model=list[Event])
-def read_timeline():
-    rows = get_events()
-
-    events = []
-
-    for row in rows:
-        events.append(
-            Event(
-                event_id=row[0],
-                timestamp=row[1],
-                source=row[2],
-                event_type=row[3],
-                user=row[4],
-                host=row[5],
-                source_ip=row[6],
-                destination_ip=row[7],
-                domain=row[8],
-                artifact=row[9],
-                hash=row[10],
-                description=row[11],
-                confidence=row[12],
-            )
-        )
-
-    return sort_events_by_time(
-        [event.model_dump() for event in events]
+def read_timeline(
+    user: str | None = Query(default=None, min_length=1),
+    host: str | None = Query(default=None, min_length=1),
+    source: str | None = Query(
+        default=None,
+        pattern="^(system|network|email|incident_response)$",
+    ),
+    start_time: str | None = Query(default=None, min_length=1),
+    end_time: str | None = Query(default=None, min_length=1),
+):
+    """Return chronologically sorted events with optional filters."""
+    return _get_timeline_events(
+        user=user,
+        host=host,
+        source=source,
+        start_time=start_time,
+        end_time=end_time,
     )
+
 
 @app.get("/incidents")
 def read_incidents():
-    """
-    Return structured investigation results.
-
-    Events are loaded from the database and processed through
-    the investigation pipeline.
-    """
-    rows = get_events()
-
-    events = []
-
-    for row in rows:
-        events.append(
-            {
-                "event_id": row[0],
-                "timestamp": row[1],
-                "source": row[2],
-                "event_type": row[3],
-                "user": row[4],
-                "host": row[5],
-                "source_ip": row[6],
-                "destination_ip": row[7],
-                "domain": row[8],
-                "artifact": row[9],
-                "hash": row[10],
-                "description": row[11],
-                "confidence": row[12],
-            }
-        )
-
+    """Return structured investigation results."""
+    events = [_event_dict_from_row(row) for row in get_events()]
     return build_investigation(events)
+
 
 @app.get("/incidents/{incident_id}")
 def read_incident(incident_id: str):
-    """
-    Return a single investigation by incident ID.
-    """
-    rows = get_events()
-
-    events = []
-
-    for row in rows:
-        events.append(
-            {
-                "event_id": row[0],
-                "timestamp": row[1],
-                "source": row[2],
-                "event_type": row[3],
-                "user": row[4],
-                "host": row[5],
-                "source_ip": row[6],
-                "destination_ip": row[7],
-                "domain": row[8],
-                "artifact": row[9],
-                "hash": row[10],
-                "description": row[11],
-                "confidence": row[12],
-            }
-        )
-
+    """Return a single investigation by incident ID."""
+    events = [_event_dict_from_row(row) for row in get_events()]
     investigations = build_investigation(events)
 
     for incident in investigations:
@@ -232,6 +270,7 @@ def create_evidence(evidence: EvidenceCreate):
                 status_code=409,
                 detail=f"Evidence with ID '{evidence.evidence_id}' already exists.",
             ) from error
+
         raise HTTPException(
             status_code=400,
             detail="Evidence record violates a database constraint.",
@@ -269,10 +308,7 @@ def create_event_evidence_link(
     link: EvidenceLinkCreate | None = None,
 ):
     """Link existing evidence metadata to an existing event."""
-    event_exists = any(
-        row[0] == event_id
-        for row in get_events()
-    )
+    event_exists = any(row[0] == event_id for row in get_events())
 
     if not event_exists:
         raise HTTPException(
@@ -310,10 +346,7 @@ def create_event_evidence_link(
 @app.get("/events/{event_id}/evidence")
 def read_event_evidence(event_id: str):
     """Retrieve all evidence linked to an event."""
-    event_exists = any(
-        row[0] == event_id
-        for row in get_events()
-    )
+    event_exists = any(row[0] == event_id for row in get_events())
 
     if not event_exists:
         raise HTTPException(
@@ -327,27 +360,7 @@ def read_event_evidence(event_id: str):
 @app.get("/incidents/{incident_id}/evidence")
 def read_incident_evidence(incident_id: str):
     """Return unique evidence records linked to an incident's events."""
-    rows = get_events()
-
-    events = [
-        {
-            "event_id": row[0],
-            "timestamp": row[1],
-            "source": row[2],
-            "event_type": row[3],
-            "user": row[4],
-            "host": row[5],
-            "source_ip": row[6],
-            "destination_ip": row[7],
-            "domain": row[8],
-            "artifact": row[9],
-            "hash": row[10],
-            "description": row[11],
-            "confidence": row[12],
-        }
-        for row in rows
-    ]
-
+    events = [_event_dict_from_row(row) for row in get_events()]
     incidents = build_investigation(events)
 
     incident = next(
@@ -383,17 +396,14 @@ def read_incident_evidence(incident_id: str):
             evidence_by_id[evidence_id]["event_links"].append(
                 {
                     "event_id": event_id,
-                    "relationship": record.get(
-                        "relationship", "supports"
-                    ),
+                    "relationship": record.get("relationship", "supports"),
                 }
             )
 
     return {
         "incident_id": incident_id,
         "evidence": list(evidence_by_id.values()),
-         }
-
+    }
 
 
 @app.post("/evidence/acquire", status_code=201)
@@ -411,16 +421,12 @@ def acquire_evidence(request: EvidenceAcquisitionRequest):
 
         try:
             return register_acquired_evidence(evidence)
-
         except Exception:
-            # The database registration did not complete.
             # Remove only the managed copy, never the original source.
             try:
                 remove_acquired_file(evidence)
             except OSError:
-                # Preserve the original registration error.
                 pass
-
             raise
 
     except AcquisitionError as error:
@@ -428,7 +434,6 @@ def acquire_evidence(request: EvidenceAcquisitionRequest):
             status_code=400,
             detail=str(error),
         ) from error
-
     except sqlite3.IntegrityError as error:
         if "UNIQUE constraint failed" in str(error):
             raise HTTPException(
@@ -440,19 +445,16 @@ def acquire_evidence(request: EvidenceAcquisitionRequest):
             status_code=500,
             detail="The evidence record could not be saved.",
         ) from error
-
     except OSError as error:
         raise HTTPException(
             status_code=500,
             detail="The evidence file could not be acquired or cleaned up.",
         ) from error
-
     except Exception as error:
         raise HTTPException(
             status_code=500,
             detail="The evidence record could not be saved.",
         ) from error
-
 
 
 @app.get("/evidence/{evidence_id}/custody")
@@ -471,16 +473,16 @@ def read_evidence_custody(evidence_id: str):
         "audit_entries": get_chain_of_custody(evidence_id),
     }
 
+
 @app.post("/evidence/{evidence_id}/verify")
 def verify_evidence(evidence_id: str, verified_by: str):
     """Verify an acquired file and record the result in custody history."""
-
     actor = verified_by.strip()
 
     if not actor or len(actor) > 128:
         raise HTTPException(
             status_code=422,
-            detail="verified_by must contain 1–128 characters.",
+            detail="verified_by must contain 1-128 characters.",
         )
 
     evidence = get_evidence(evidence_id)
