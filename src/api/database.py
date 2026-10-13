@@ -1,5 +1,6 @@
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 from uuid import uuid4
@@ -9,12 +10,21 @@ from datetime import datetime, timezone
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 DATA_DIR = PROJECT_ROOT / "data"
-DATABASE_PATH = DATA_DIR / "evidencefusion.db"
+DEFAULT_DATABASE_PATH = DATA_DIR / "evidencefusion.db"
+
+# The application uses the normal project database unless an explicit
+# database path is provided through the environment.
+DATABASE_PATH = Path(
+    os.environ.get(
+        "EVIDENCEFUSION_DB_PATH",
+        str(DEFAULT_DATABASE_PATH),
+    )
+).expanduser().resolve()
 
 
 def get_connection():
     """Create a database connection with foreign-key enforcement."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     connection = sqlite3.connect(DATABASE_PATH)
     connection.execute("PRAGMA foreign_keys = ON")
@@ -80,7 +90,7 @@ def initialize_database():
                 FOREIGN KEY (evidence_id)
                     REFERENCES evidence(evidence_id) ON DELETE RESTRICT
             );
-             """
+            """
         )
     finally:
         connection.close()
@@ -296,8 +306,7 @@ if __name__ == "__main__":
 
 
 def register_acquired_evidence(evidence):
-    """
-    Save acquired evidence and its initial custody audit entry atomically.
+    """Save acquired evidence and its initial custody audit entry atomically.
 
     Either both records are committed, or neither is.
     """
@@ -401,11 +410,9 @@ def get_chain_of_custody(evidence_id):
     finally:
         connection.close()
 
+
 def record_evidence_verification(evidence_id, actor, result):
-    """
-    Update the current verification status and append a custody
-    audit entry in one database transaction.
-    """
+    """Update verification status and append a custody audit entry atomically."""
     occurred_at = datetime.now(timezone.utc).isoformat()
     audit_id = f"AUD-{uuid4().hex[:12].upper()}"
 
