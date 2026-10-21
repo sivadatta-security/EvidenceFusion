@@ -183,10 +183,44 @@ The following endpoints are documented by the project:
 | `GET /incidents/{incident_id}/evidence` | Retrieve evidence associated with an incident |
 | `GET /evidence/{evidence_id}/custody` | Retrieve chain-of-custody records |
 | `POST /evidence/{evidence_id}/verify` | Verify evidence integrity and record the result |
+| `GET /datasets/sample/summary` | Read counts and manifest for the isolated benchmark sample |
+| `GET /datasets/sample/records` | Read a bounded, paginated set of benchmark rows |
+| `GET /threat-intel/{indicator_type}/{indicator}` | Look up an existing VirusTotal report for a file SHA-256, IP, domain, or URL |
 
 For current parameters, validation rules, and response schemas, consult the running application's interactive documentation at `/docs`.
 
-## 10. Running Tests
+## 10. External Dataset and Threat Intelligence Integrations
+
+### Isolated benchmark datasets
+
+The importer creates a separate SQLite database at `data/external_dataset_demo.db` and refuses to overwrite an existing output file. It samples 150 CICIDS2017 network rows and 100 FERB email rows with a reproducible seed. The API reads this database in read-only mode:
+
+- `GET /datasets/sample/summary`
+- `GET /datasets/sample/records?dataset=CICIDS2017&limit=50&offset=0`
+- `GET /datasets/sample/records?dataset=FERB&limit=50&offset=0`
+
+Generate the sample using the existing importer command and the original CSV files:
+
+```powershell
+python -m src.ingestion.dataset_importer --network-csv "PATH_TO_CICIDS2017_CSV" --email-csv "PATH_TO_FERB_CSV"
+```
+
+These benchmark rows remain separate from the operational EvidenceFusion events table. FERB labels are preserved without assuming that `0` or `1` means malicious, and benchmark labels must not be treated as confirmed real-world incidents.
+
+### VirusTotal lookups
+
+Set the API key in the current process environment; do not commit it to Git:
+
+```powershell
+$env:VT_API_KEY = "YOUR_VIRUSTOTAL_API_KEY"
+python -m uvicorn src.api.main:app --reload
+```
+
+Use `GET /threat-intel/file/{sha256}`, `GET /threat-intel/ip/{ip_address}`, `GET /threat-intel/domain/{domain}`, or `GET /threat-intel/url/{url}` to retrieve an existing VirusTotal report. The integration uses GET requests only: it does not upload evidence files or submit URLs for analysis. The API returns a compact summary of reputation, analysis statistics, names/categories, and the provider permalink. Provider results are external context and require analyst validation.
+
+Without `VT_API_KEY`, the endpoint returns HTTP 503. Provider rate limits return HTTP 429. A missing report returns HTTP 404.
+
+## 11. Running Tests
 
 Run the test suite from the repository root:
 
@@ -198,7 +232,7 @@ The latest confirmed project test result before this documentation update was **
 
 The warnings were dependency deprecation warnings and were not test failures. Rerun the suite after code changes and investigate failures before committing.
 
-## 11. Current Limitations
+## 12. Current Limitations
 
 - Automated correlation depends on configured rules and available event fields.
 - Severity is an initial rule-based classification that requires analyst interpretation.
@@ -208,7 +242,7 @@ The warnings were dependency deprecation warnings and were not test failures. Re
 - Benchmark and synthetic datasets require appropriate provenance and contextual interpretation.
 - The application requires additional validation and security hardening before operational deployment.
 
-## 12. Future Improvements
+## 13. Future Improvements
 
 Potential improvements include:
 
@@ -222,7 +256,7 @@ Potential improvements include:
 
 These items should be treated as future work until implemented and tested.
 
-## 13. Project Purpose
+## 14. Project Purpose
 
 EvidenceFusion brings evidence handling, event correlation, incident investigation, and forensic context into a unified DFIR workflow.
 
