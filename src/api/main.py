@@ -50,6 +50,14 @@ from src.threat_intel.virustotal import (
 
 
 
+app = FastAPI(
+    title="EvidenceFusion API",
+    description="Backend API for the EvidenceFusion DFIR investigation platform.",
+    version="0.1.0",
+)
+
+initialize_database()
+
 @app.get("/threat-intel/{indicator_type}/{indicator:path}")
 def get_threat_intelligence(indicator_type: str, indicator: str):
     """Look up an existing VirusTotal report; never upload evidence or submit URLs."""
@@ -66,14 +74,6 @@ def get_threat_intelligence(indicator_type: str, indicator: str):
         status_code = 404 if "no report" in message.lower() else 502
         raise HTTPException(status_code=status_code, detail=message) from error
 
-
-app = FastAPI(
-    title="EvidenceFusion API",
-    description="Backend API for the EvidenceFusion DFIR investigation platform.",
-    version="0.1.0",
-)
-
-initialize_database()
 
 app.add_middleware(
     CORSMiddleware,
