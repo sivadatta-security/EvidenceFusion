@@ -663,3 +663,45 @@ def verify_evidence(evidence_id: str, verified_by: str):
         "evidence": updated_evidence,
         "verification": result,
     }
+
+@app.get("/incidents/{incident_id}/report")
+def export_incident_report(
+    incident_id: str,
+    format: str = Query(default="json", pattern="^(json|markdown)$"),
+):
+    """Export a point-in-time incident report as JSON or Markdown."""
+    from fastapi.responses import PlainTextResponse
+    from src.api.reporting import build_report_payload, render_markdown_report
+
+    events = [_event_dict_from_row(row) for row in get_events()]
+    incidents = build_investigation(events)
+    incident = next(
+        (item for item in incidents if item["incident_id"] == incident_id),
+        None,
+    )
+    if incident is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Incident '{incident_id}' not found.",
+        )
+
+    enriched_incident = _enrich_incident_with_mitre(incident, events)
+    evidence_result = read_incident_evidence(incident_id)
+    payload = build_report_payload(
+        enriched_incident,
+        events,
+        evidence_result.get("evidence", []),
+    )
+
+    if format == "markdown":
+        return PlainTextResponse(
+            render_markdown_report(payload),
+            media_type="text/markdown; charset=utf-8",
+            headers={
+                "Content-Disposition": (
+                    f'attachment; filename="evidencefusion-{incident_id}.md"'
+                )
+            },
+        )
+    return payload
+

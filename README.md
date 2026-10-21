@@ -174,6 +174,7 @@ The following endpoints are documented by the project:
 | `GET /events` | Retrieve events and supported filters |
 | `GET /incidents` | Retrieve incident summaries and supported filters |
 | `GET /incidents/{incident_id}` | Retrieve a single incident |
+| `GET /incidents/{incident_id}/report?format=json` or `format=markdown` | Export an incident snapshot as JSON or downloadable Markdown, including its events and linked evidence |
 | `GET /dashboard/summary` | Retrieve dashboard metrics |
 | `POST /evidence` | Register evidence metadata |
 | `GET /evidence/{evidence_id}` | Retrieve evidence metadata |
@@ -261,3 +262,8 @@ These items should be treated as future work until implemented and tested.
 EvidenceFusion brings evidence handling, event correlation, incident investigation, and forensic context into a unified DFIR workflow.
 
 The project is intended as an academic investigation platform. Its findings should be interpreted by an analyst and validated against the available evidence.
+
+
+### Incident report export
+
+Use `GET /incidents/{incident_id}/report?format=json` for a structured report snapshot or `GET /incidents/{incident_id}/report?format=markdown` to download a readable Markdown report. Reports include the incident summary, associated events, linked evidence, and an analyst-caution notice. Export is read-only and does not change evidence or investigation records. Validate all correlation and threat-intelligence conclusions against source evidence.
