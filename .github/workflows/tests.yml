@@ -17,5 +17,7 @@ jobs:
           python-version: "3.12"
       - name: Install test dependencies
         run: python -m pip install --upgrade pip fastapi uvicorn pytest httpx
+      - name: Check dashboard JavaScript syntax
+        run: node --check dashboard/app.js
       - name: Run tests
         run: python -m pytest -q

@@ -924,6 +924,120 @@ async function applyIncidentFilters() {
 
 
 /* =========================
+   DATASET AND THREAT INTELLIGENCE
+   ========================= */
+
+async function loadDatasetSummary() {
+    const container = document.getElementById("dataset-summary");
+    if (!container) return;
+
+    try {
+        const summary = await fetchApi("/datasets/sample/summary");
+        const counts = (summary.datasets ?? []).map(item => `
+            <div class="integration-stat">
+                <span>${escapeHtml(item.dataset)}</span>
+                <strong>${escapeHtml(item.record_count)}</strong>
+            </div>
+        `).join("");
+
+        container.innerHTML = `
+            <div class="integration-stats">
+                <div class="integration-stat total">
+                    <span>Total sample rows</span>
+                    <strong>${escapeHtml(summary.total_records ?? 0)}</strong>
+                </div>
+                ${counts}
+            </div>
+            <p class="muted-text">${escapeHtml(summary.note ?? "Benchmark data is separate from operational events.")}</p>
+        `;
+    } catch (error) {
+        container.innerHTML = `
+            <div class="empty-state">
+                Dataset sample is not available yet. Create it with the documented dataset importer.
+                <small>${escapeHtml(error.message)}</small>
+            </div>
+        `;
+    }
+}
+
+async function loadDatasetRecords(dataset = "") {
+    const container = document.getElementById("dataset-records");
+    if (!container) return;
+
+    container.innerHTML = '<div class="loading-state">Loading sample records...</div>';
+    const params = new URLSearchParams({ limit: "10", offset: "0" });
+    if (dataset) params.set("dataset", dataset);
+
+    try {
+        const result = await fetchApi(`/datasets/sample/records?${params.toString()}`);
+        if (!result.records?.length) {
+            container.innerHTML = '<div class="empty-state">No sample records found.</div>';
+            return;
+        }
+
+        container.innerHTML = `
+            <p class="muted-text">Showing ${result.records.length} of ${escapeHtml(result.total_records)} records.</p>
+            <div class="integration-record-list">
+                ${result.records.map(record => `
+                    <article class="integration-record">
+                        <div><strong>${escapeHtml(record.dataset)}</strong><span>${escapeHtml(record.event_type)}</span></div>
+                        <p>Original label: ${escapeHtml(record.original_label)} · Row ${escapeHtml(record.source_row_number)}</p>
+                        <small>${escapeHtml(record.event_id)}</small>
+                    </article>
+                `).join("")}
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = `
+            <div class="empty-state">Could not load benchmark rows. ${escapeHtml(error.message)}</div>
+        `;
+    }
+}
+
+async function lookupThreatIndicator(event) {
+    event.preventDefault();
+    const type = document.getElementById("threat-indicator-type")?.value;
+    const value = document.getElementById("threat-indicator-value")?.value.trim();
+    const container = document.getElementById("threat-intel-result");
+    if (!container || !type || !value) return;
+
+    container.innerHTML = '<div class="loading-state">Looking up existing VirusTotal report...</div>';
+    try {
+        const response = await fetchApi(`/threat-intel/${encodeURIComponent(type)}/${encodeURIComponent(value)}`);
+        const stats = response.analysis_stats ?? {};
+        const statCards = ["malicious", "suspicious", "harmless", "undetected"].map(key => `
+            <div class="integration-stat"><span>${escapeHtml(key)}</span><strong>${escapeHtml(stats[key] ?? 0)}</strong></div>
+        `).join("");
+        const categories = response.categories && typeof response.categories === "object"
+            ? Object.entries(response.categories).slice(0, 8).map(([source, category]) =>
+                `<li><strong>${escapeHtml(source)}:</strong> ${escapeHtml(category)}</li>`).join("")
+            : "";
+
+        container.innerHTML = `
+            <div class="threat-result">
+                <div class="threat-result-heading">
+                    <strong>${escapeHtml(response.provider)} report</strong>
+                    <span>Reputation: ${escapeHtml(response.reputation ?? "Not available")}</span>
+                </div>
+                <p class="threat-indicator">${escapeHtml(response.indicator_type)} · ${escapeHtml(response.indicator)}</p>
+                <div class="integration-stats">${statCards}</div>
+                ${response.last_analysis_date ? `<p class="muted-text">Last analysis timestamp: ${escapeHtml(response.last_analysis_date)}</p>` : ""}
+                ${categories ? `<ul class="threat-categories">${categories}</ul>` : ""}
+                <p class="muted-text">${escapeHtml(response.disclaimer ?? "Validate third-party intelligence against original evidence.")}</p>
+                <a class="filter-button inline-link" href="${escapeHtml(response.permalink)}" target="_blank" rel="noopener noreferrer">Open provider report</a>
+            </div>
+        `;
+    } catch (error) {
+        container.innerHTML = `
+            <div class="empty-state">
+                Lookup unavailable. Check the API key, rate limit, and indicator.
+                <small>${escapeHtml(error.message)}</small>
+            </div>
+        `;
+    }
+}
+
+/* =========================
    DASHBOARD REFRESH
    ========================= */
 
@@ -979,6 +1093,21 @@ async function loadDashboard() {
    ========================= */
 
 document.addEventListener("DOMContentLoaded", () => {
+    const datasetForm = document.getElementById("dataset-records-form");
+    if (datasetForm) {
+        datasetForm.addEventListener("submit", event => {
+            event.preventDefault();
+            loadDatasetRecords(document.getElementById("dataset-records-source")?.value || "");
+        });
+    }
+
+    const threatForm = document.getElementById("threat-intel-form");
+    if (threatForm) {
+        threatForm.addEventListener("submit", lookupThreatIndicator);
+    }
+
+    loadDatasetSummary();
+
     const refreshButton = document.getElementById("refresh-dashboard");
 
     if (refreshButton) {
