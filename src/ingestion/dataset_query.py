@@ -2,7 +2,6 @@
 import json
 import sqlite3
 from pathlib import Path
-from urllib.parse import quote
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -56,7 +55,7 @@ def get_dataset_summary(database_path: str | Path = DEFAULT_DATASET_DATABASE) ->
             ).fetchall()
         ]
         return {
-            "database": "isolated external dataset sample",
+            "database": "isolated external security datasets",
             "read_only": True,
             "total_records": sum(item["record_count"] for item in datasets),
             "datasets": datasets,
@@ -81,11 +80,19 @@ def get_dataset_records(
         raise ValueError("offset must be zero or greater")
     if dataset is not None:
         dataset = dataset.strip().upper()
-        if dataset not in {"CICIDS2017", "FERB"}:
-            raise ValueError("dataset must be CICIDS2017 or FERB")
+        if not dataset:
+            dataset = None
 
     connection = _connect_read_only(database_path)
     try:
+        available_datasets = {
+            row[0] for row in connection.execute(
+                "SELECT dataset FROM import_manifest"
+            ).fetchall()
+        }
+        if dataset is not None and dataset not in available_datasets:
+            choices = ", ".join(sorted(available_datasets)) or "none imported"
+            raise ValueError(f"dataset must be one of the imported datasets: {choices}")
         where = " WHERE dataset = ?" if dataset else ""
         params = (dataset, limit, offset) if dataset else (limit, offset)
         total = connection.execute(
