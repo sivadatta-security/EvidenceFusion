@@ -2,7 +2,7 @@
 
 **Automated Multi-Source Digital Evidence Correlation for DFIR Investigations**
 
-EvidenceFusion is a digital forensics and incident response (DFIR) investigation platform designed to organize digital evidence, correlate security events from multiple sources, and help analysts investigate related activity through a unified dashboard.
+EvidenceFusion is an academic Digital Forensics and Incident Response (DFIR) platform designed to organize digital evidence, correlate security events from multiple sources, and help analysts investigate related activity through a unified dashboard.
 
 ## 1. Project Objectives
 
@@ -11,31 +11,31 @@ EvidenceFusion is a digital forensics and incident response (DFIR) investigation
 - Maintain evidence acquisition and chain-of-custody records.
 - Store normalized security events from different sources.
 - Correlate related events using shared attributes and timestamps.
-- Group related events into incidents and assign an initial severity.
+- Group related events into incidents and assign initial severity.
 - Display investigation summaries and supporting evidence.
-- Map relevant event types to MITRE ATT&CK techniques.
+- Provide evidence-based MITRE ATT&CK assessment information.
 
 ## 2. Main Features
 
 ### Digital Evidence Acquisition
 
-Evidence files are acquired from the project's incoming directory into managed evidence storage. The acquisition service calculates SHA-256 hashes, checks that the source remains unchanged during copying, and compares the acquired copy with the source.
+Evidence files can be acquired from the project's incoming directory into managed evidence storage. The acquisition workflow calculates SHA-256 hashes and checks the acquired copy against the source.
 
 An independently supplied expected hash can also be used during acquisition.
 
 ### Evidence Integrity Verification
 
-The verification service recalculates the hash of a managed evidence file and compares it with the recorded acquisition hash. Results distinguish verified, failed, and unavailable checks.
+The verification service recalculates the hash of a managed evidence file and compares it with the recorded acquisition hash.
 
-A matching hash supports integrity verification against the recorded baseline; it does not independently establish who created the evidence.
+A matching hash supports integrity verification against the recorded baseline. It does not independently establish authorship or authenticity.
 
 ### Chain of Custody
 
-Evidence records include acquisition metadata such as the analyst, timestamp, acquisition method, hash algorithm, and verification status. The API also exposes recorded chain-of-custody entries.
+Evidence records include acquisition metadata, such as the analyst, timestamp, acquisition method, hash algorithm, and verification status. The API exposes recorded chain-of-custody entries.
 
 ### Event Correlation and Incident Investigation
 
-Normalized events can contain information such as:
+Normalized events may include:
 
 - Timestamp and event source
 - User and host
@@ -43,19 +43,29 @@ Normalized events can contain information such as:
 - Domain and file hash
 - Event type, description, and confidence
 
-The correlation engine assigns weighted scores to matching attributes and temporal proximity. Qualifying relationships are grouped into incident clusters. Investigation summaries include event counts, time ranges, sources, severity, correlation information, and available MITRE ATT&CK mappings.
+The correlation engine evaluates matching attributes and temporal proximity. Qualifying relationships can be grouped into incident clusters.
+
+Incident information includes event counts, time ranges, sources, severity, correlation details, and available MITRE ATT&CK assessment information.
 
 Correlation scores and severity labels are investigative aids, not proof that malicious activity occurred.
 
-### Investigation Dashboard
+### Investigation Workbench
 
-The web dashboard provides access to investigation information, including event timelines, incident details, supporting evidence, and MITRE ATT&CK mappings. The API also supports timeline and incident filtering.
+The dashboard provides a unified interface for reviewing investigation information, event timelines, incident details, filtering options, and MITRE ATT&CK assessments.
+
+MITRE assessment results must be interpreted using their evidence, confidence, and review status. A result requiring analyst review should not be treated as a confirmed technique mapping.
+
+### Dataset Import
+
+The project includes a dataset-importing module for bringing supported security datasets into the investigation workflow. Imported data should retain its provenance and original labels wherever supported.
+
+Dataset samples are not automatically proof of real-world incidents. Synthetic or benchmark records should be interpreted according to their source and context.
 
 ## 3. Technology Stack
 
-- **Python** — application logic and correlation
-- **FastAPI** — REST API
-- **SQLite** — event and evidence metadata storage
+- **Python** — application logic and event processing
+- **FastAPI** — REST API and dashboard delivery
+- **SQLite** — local application data storage
 - **HTML, CSS, JavaScript** — web dashboard
 - **SHA-256** — evidence integrity checking
 - **pytest** — automated testing
@@ -75,87 +85,94 @@ EvidenceFusion/
 │   ├── acquisition/
 │   ├── api/
 │   ├── correlation/
+│   ├── ingestion/
 │   └── mitre/
 └── tests/
 ```
 
-The `data/incoming/` directory is used for files awaiting acquisition, while `data/evidence/` stores managed evidence copies. The API database module manages application records.
+The project may contain additional modules and data files beyond this overview.
+
+- `dashboard/` contains the web interface.
+- `data/incoming/` is used for files awaiting acquisition.
+- `data/evidence/` stores managed evidence copies.
+- `src/api/` contains the API application.
+- `src/ingestion/` contains dataset-importing functionality.
+- `src/mitre/` contains MITRE ATT&CK assessment logic.
+- `tests/` contains automated tests.
 
 ## 5. Requirements
 
-- Python 3.14 or a compatible Python version supported by the installed dependencies
+- Python and the project's required Python packages
 - Git
 - A modern web browser
-- A local static web server for the dashboard, such as the VS Code Live Server extension
-- The Python packages required by the application
 
-Run commands from the repository root.
+Use a Python version compatible with the installed project dependencies. Run commands from the repository root.
+
+The repository does not currently include a `requirements.txt` file. Use the project's existing environment or its documented dependency configuration rather than assuming a dependency list.
 
 ## 6. Setup and Startup
 
-### Step 1: Install dependencies
+### Step 1: Open the repository
 
-Activate your existing virtual environment if you use one. Install the project's required packages according to the dependency files provided by your team.
+Open a terminal in the EvidenceFusion repository root.
 
-If Uvicorn is not installed, install it in your active Python environment:
+If you use a virtual environment, activate it before starting the application.
 
-```powershell
-python -m pip install uvicorn
-```
+### Step 2: Install or verify dependencies
 
-### Step 2: Start the API
+Install the packages required by the project in the active Python environment. Ensure FastAPI, Uvicorn, and the application's other dependencies are available.
+
+### Step 3: Start the API and dashboard
+
+Run:
 
 ```powershell
 python -m uvicorn src.api.main:app --reload
 ```
 
-The local API should be available at:
+Open the following addresses in your browser:
 
-- API base URL: `http://127.0.0.1:8000`
-- Interactive API documentation: `http://127.0.0.1:8000/docs`
+- **Investigation dashboard:** http://127.0.0.1:8000/dashboard/
+- **Interactive API documentation:** http://127.0.0.1:8000/docs
+- **API base URL:** http://127.0.0.1:8000
 
-Keep this terminal running while using the application.
+Keep the terminal running while using the application.
 
-### Step 3: Start the dashboard
-
-Open the `dashboard` folder in Visual Studio Code and launch `index.html` using Live Server. Configure the server to use port `5500`, which is included in the API's current CORS configuration.
-
-Open the local URL displayed by Live Server.
-
-If the dashboard cannot reach the API, check that the API is running and that the dashboard origin matches the configured CORS origins.
+The dashboard is served by the FastAPI application, so a separate Live Server instance is not required for the normal workflow.
 
 ## 7. Evidence Acquisition and Verification Workflow
 
-1. Place a test artifact in `data/incoming/`.
+1. Place a suitable test artifact in `data/incoming/`.
 2. Open the interactive API documentation at `/docs`.
-3. Find `POST /evidence/acquire`.
-4. Supply the filename, analyst identifier, and artifact type. An independently calculated expected SHA-256 hash can be supplied when available.
-5. Record the returned evidence ID and acquisition result.
-6. Use `POST /evidence/{evidence_id}/verify` to check the stored evidence against its recorded hash.
-7. Use `GET /evidence/{evidence_id}/custody` to inspect the recorded chain-of-custody history.
-8. Review the evidence metadata and verification result.
+3. Locate `POST /evidence/acquire`.
+4. Supply the required filename, analyst identifier, and artifact type.
+5. Supply an independently calculated expected SHA-256 hash when appropriate.
+6. Record the returned evidence ID and acquisition result.
+7. Use `POST /evidence/{evidence_id}/verify` to verify the stored file against its recorded hash.
+8. Use `GET /evidence/{evidence_id}/custody` to inspect the recorded chain-of-custody history.
 
-**Important:** Use test artifacts for demonstrations. Do not place original investigative evidence in a test workflow unless the handling procedure has been approved. Preserve original files and maintain appropriate access controls.
+Use test artifacts for demonstrations. Preserve original investigative evidence and follow approved evidence-handling procedures.
 
 ## 8. Event and Incident Investigation Workflow
 
-1. Submit or load normalized security events through the available event API.
+1. Load or submit supported normalized security events.
 2. Retrieve events using `GET /events`.
-3. Inspect the timeline and apply supported filters.
-4. Retrieve incidents using `GET /incidents`.
-5. Open an incident to review its correlated events, summary, supporting evidence, and available MITRE ATT&CK mappings.
-6. Review the dashboard summary and recorded evidence history when needed.
+3. Review event timelines and available filters.
+4. Retrieve incident summaries using `GET /incidents`.
+5. Open an incident to inspect its correlated events, summary, and supporting evidence.
+6. Review the associated MITRE ATT&CK assessment, including any items requiring analyst review.
+7. Use the dashboard summary to understand the investigation data currently available.
 
-The exact correlation outcome depends on the available event attributes and the configured correlation rules.
+Correlation outcomes depend on the supplied data, available event attributes, and implemented rules.
 
 ## 9. API Reference
 
-The following endpoints are implemented in the API:
+The following endpoints are documented by the project:
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /events` | Retrieve events, with supported filters |
-| `GET /incidents` | Retrieve incident summaries, with supported filters |
+| `GET /events` | Retrieve events and supported filters |
+| `GET /incidents` | Retrieve incident summaries and supported filters |
 | `GET /incidents/{incident_id}` | Retrieve a single incident |
 | `GET /dashboard/summary` | Retrieve dashboard metrics |
 | `POST /evidence` | Register evidence metadata |
@@ -167,28 +184,29 @@ The following endpoints are implemented in the API:
 | `GET /evidence/{evidence_id}/custody` | Retrieve chain-of-custody records |
 | `POST /evidence/{evidence_id}/verify` | Verify evidence integrity and record the result |
 
-For request parameters, validation rules, and response schemas, use the interactive API documentation at `/docs`.
+For current parameters, validation rules, and response schemas, consult the running application's interactive documentation at `/docs`.
 
 ## 10. Running Tests
 
-From the repository root:
+Run the test suite from the repository root:
 
 ```powershell
 python -m pytest -q
 ```
 
-The current baseline before this documentation update is **82 passing tests**.
+The latest confirmed project test result before this documentation update was **95 passed, with 2 warnings**.
 
-Tests should be run again after changes. Do not commit a change if the suite fails without investigating the failure.
+The warnings were dependency deprecation warnings and were not test failures. Rerun the suite after code changes and investigate failures before committing.
 
 ## 11. Current Limitations
 
-- Automated correlation is based on configured rules and available event fields.
-- Severity is an initial rule-based classification and requires analyst interpretation.
-- MITRE ATT&CK mappings depend on the project's implemented mapping rules.
-- Hash verification compares the current evidence file with the recorded acquisition baseline; it does not prove authorship or authenticity.
-- Evidence acquisition currently copies local files from the incoming directory. It should not be described as a complete physical disk or memory acquisition capability.
-- The platform should be validated with representative end-to-end test data before being used in a real investigation.
+- Automated correlation depends on configured rules and available event fields.
+- Severity is an initial rule-based classification that requires analyst interpretation.
+- MITRE ATT&CK assessments depend on implemented mapping rules and the evidence available.
+- Hash verification compares a file with its recorded baseline; it does not prove authorship or authenticity.
+- Local file acquisition should not be described as complete physical disk or memory acquisition.
+- Benchmark and synthetic datasets require appropriate provenance and contextual interpretation.
+- The application requires additional validation and security hardening before operational deployment.
 
 ## 12. Future Improvements
 
@@ -197,12 +215,15 @@ Potential improvements include:
 - Additional source-specific event parsers
 - Broader forensic artifact ingestion
 - More end-to-end integration tests
-- Improved investigation export and reporting
+- Investigation export and reporting
 - Additional correlation rules and analyst feedback
-- Deployment hardening, authentication, and role-based access control
+- Authentication and role-based access control
+- Deployment hardening
 
-These improvements should be treated as future work until implemented and tested.
+These items should be treated as future work until implemented and tested.
 
 ## 13. Project Purpose
 
-EvidenceFusion aims to bring evidence handling, event correlation, incident investigation, and supporting forensic context into one accessible DFIR workflow. It is an academic investigation platform and should be validated and secured appropriately before operational deployment.
+EvidenceFusion brings evidence handling, event correlation, incident investigation, and forensic context into a unified DFIR workflow.
+
+The project is intended as an academic investigation platform. Its findings should be interpreted by an analyst and validated against the available evidence.
