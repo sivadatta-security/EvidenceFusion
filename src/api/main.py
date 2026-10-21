@@ -41,6 +41,19 @@ from src.mitre.mapping import (
     map_incident_to_mitre,
 )
 
+from src.threat_intel.virustotal import (
+    VirusTotalNotConfigured,
+    VirusTotalRateLimited,
+    VirusTotalRequestError,
+    lookup_indicator,
+)
+from src.ingestion.dataset_query import (
+    DatasetDatabaseUnavailable,
+    get_dataset_records,
+    get_dataset_summary,
+)
+
+
 
 app = FastAPI(
     title="EvidenceFusion API",
@@ -49,6 +62,51 @@ app = FastAPI(
 )
 
 initialize_database()
+
+@app.get("/threat-intel/{indicator_type}/{indicator:path}")
+def get_threat_intelligence(indicator_type: str, indicator: str):
+    """Look up an existing VirusTotal report; never upload evidence or submit URLs."""
+    try:
+        return lookup_indicator(indicator_type, indicator)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except VirusTotalNotConfigured as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    except VirusTotalRateLimited as error:
+        raise HTTPException(status_code=429, detail=str(error)) from error
+    except VirusTotalRequestError as error:
+        message = str(error)
+        status_code = 404 if "no report" in message.lower() else 502
+        raise HTTPException(status_code=status_code, detail=message) from error
+
+
+@app.get("/datasets/sample/summary")
+def dataset_sample_summary():
+    """Summarize the isolated external benchmark database."""
+    try:
+        return get_dataset_summary()
+    except DatasetDatabaseUnavailable as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except sqlite3.Error as error:
+        raise HTTPException(status_code=500, detail="Could not read the dataset sample database.") from error
+
+
+@app.get("/datasets/sample/records")
+def dataset_sample_records(
+    dataset: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """Return a bounded page of isolated benchmark rows."""
+    try:
+        return get_dataset_records(dataset=dataset, limit=limit, offset=offset)
+    except DatasetDatabaseUnavailable as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except sqlite3.Error as error:
+        raise HTTPException(status_code=500, detail="Could not read the dataset sample database.") from error
+
 
 app.add_middleware(
     CORSMiddleware,
