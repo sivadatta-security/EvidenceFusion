@@ -20,6 +20,7 @@
                 <a class="nav-link" href="#timeline-panel"><span class="nav-icon">?</span> Event timeline</a>
                 <a class="nav-link" href="#incidents-panel"><span class="nav-icon">?</span> Investigations</a>
                 <a class="nav-link" href="#mitre-panel"><span class="nav-icon">?</span> MITRE ATT&CK</a>
+                <a class="nav-link" href="#integrations-panel"><span class="nav-icon">+</span> Data & threat intel</a>
             </nav>
             <div class="sidebar-note">
                 <span class="sidebar-note-icon">?</span>
@@ -38,6 +39,57 @@
                 <article class="summary-card"><div class="metric-top"><span class="metric-icon violet">?</span><span class="metric-caption">CORRELATED</span></div><p class="card-label">Total Incidents</p><h2 id="incident-count">0</h2><p class="metric-footnote">Investigation clusters identified</p></article>
                 <article class="summary-card high-card"><div class="metric-top"><span class="metric-icon red">!</span><span class="metric-caption">PRIORITY</span></div><p class="card-label">High Severity</p><h2 id="high-count">0</h2><p class="metric-footnote">Incidents requiring closer review</p></article>
                 <article class="summary-card"><div class="metric-top"><span class="metric-icon teal">?</span><span class="metric-caption">THREAT CONTEXT</span></div><p class="card-label">MITRE Techniques</p><h2 id="technique-count">0</h2><p class="metric-footnote">Unique techniques mapped to incidents</p></article>
+            </section>
+            <section class="panel" id="integrations-panel">
+                <div class="panel-header">
+                    <div class="section-title-wrap">
+                        <span class="section-kicker">01 / ENRICHMENT</span>
+                        <h2>Dataset & Threat Intelligence</h2>
+                        <p>Inspect isolated benchmark samples and enrich indicators with existing VirusTotal reports.</p>
+                    </div>
+                    <span class="panel-chip">ENRICHMENT</span>
+                </div>
+                <div class="integration-grid">
+                    <section class="integration-card" aria-labelledby="dataset-summary-title">
+                        <h3 id="dataset-summary-title">External dataset sample</h3>
+                        <p class="muted-text">CICIDS2017 and FERB samples are kept separate from operational events.</p>
+                        <div id="dataset-summary" aria-live="polite">
+                            <div class="empty-state">Loading dataset summary...</div>
+                        </div>
+                        <form id="dataset-records-form" class="integration-form">
+                            <label><span>Dataset</span>
+                                <select id="dataset-records-source">
+                                    <option value="">Both datasets</option>
+                                    <option value="CICIDS2017">CICIDS2017</option>
+                                    <option value="FERB">FERB</option>
+                                </select>
+                            </label>
+                            <button type="submit" class="filter-button">View sample records</button>
+                        </form>
+                        <div id="dataset-records" aria-live="polite"></div>
+                    </section>
+                    <section class="integration-card" aria-labelledby="threat-intel-title">
+                        <h3 id="threat-intel-title">VirusTotal lookup</h3>
+                        <p class="muted-text">Read-only lookup of an existing report. Evidence files and URLs are never submitted.</p>
+                        <form id="threat-intel-form" class="integration-form">
+                            <label><span>Indicator type</span>
+                                <select id="threat-indicator-type" required>
+                                    <option value="file">File SHA-256</option>
+                                    <option value="ip">IP address</option>
+                                    <option value="domain">Domain</option>
+                                    <option value="url">URL</option>
+                                </select>
+                            </label>
+                            <label><span>Indicator</span>
+                                <input id="threat-indicator-value" type="text" maxlength="2048" placeholder="SHA-256, IP, domain, or URL" required>
+                            </label>
+                            <button type="submit" class="filter-button">Look up indicator</button>
+                        </form>
+                        <div id="threat-intel-result" aria-live="polite">
+                            <div class="empty-state">Enter an indicator to retrieve threat context.</div>
+                        </div>
+                    </section>
+                </div>
             </section>
             <section class="panel" id="timeline-panel">
                 <div class="panel-header"><div class="section-title-wrap"><span class="section-kicker">01 / EVENT REVIEW</span><h2>Investigation Timeline</h2><p>Filter and review normalized activity in chronological order.</p></div><span class="panel-chip">TIMELINE</span></div>
