@@ -4,6 +4,9 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.api.database import (
     get_events,
@@ -33,6 +36,10 @@ from src.acquisition.service import (
 )
 from src.api.timeline import sort_events_by_time, parse_event_timestamp
 from src.api.investigation import build_investigation
+from src.mitre.mapping import (
+    assess_incident_for_mitre,
+    map_incident_to_mitre,
+)
 
 
 app = FastAPI(
@@ -46,14 +53,33 @@ initialize_database()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "null",
         "http://127.0.0.1:5500",
         "http://localhost:5500",
+        "http://127.0.0.1:5501",
+        "http://localhost:5501",
     ],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Serve the EvidenceFusion dashboard frontend.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DASHBOARD_DIR = PROJECT_ROOT / "dashboard"
+
+app.mount(
+    "/dashboard/static",
+    StaticFiles(directory=str(DASHBOARD_DIR)),
+    name="dashboard-static",
+)
+
+
+@app.get("/dashboard", include_in_schema=False)
+@app.get("/dashboard/", include_in_schema=False)
+def serve_dashboard():
+    """Serve the EvidenceFusion investigation dashboard."""
+    return FileResponse(str(DASHBOARD_DIR / "index.html"))
 
 def _event_from_row(row):
     """Convert a database event row to the API event model."""
@@ -91,6 +117,22 @@ def _event_dict_from_row(row):
         "description": row[11],
         "confidence": row[12],
     }
+
+
+
+def _enrich_incident_with_mitre(incident, events):
+    """Add ATT&CK mappings and conservative assessments to an incident."""
+    enriched = dict(incident)
+
+    enriched["mitre_techniques"] = map_incident_to_mitre(
+        incident, events
+    )["techniques"]
+
+    enriched["mitre_assessment"] = assess_incident_for_mitre(
+        incident, events
+    )
+
+    return enriched
 
 
 def _parse_filter_timestamp(value, parameter_name):
@@ -262,7 +304,7 @@ def read_incidents(
         if incident["event_count"] < min_events:
             continue
 
-        filtered_incidents.append(incident)
+        filtered_incidents.append(_enrich_incident_with_mitre(incident, events))
 
     return filtered_incidents
 
@@ -303,7 +345,7 @@ def read_incident(incident_id: str):
 
     for incident in investigations:
         if incident["incident_id"] == incident_id:
-            return incident
+            return _enrich_incident_with_mitre(incident, events)
 
     raise HTTPException(
         status_code=404,

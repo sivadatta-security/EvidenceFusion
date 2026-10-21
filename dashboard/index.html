@@ -1,152 +1,104 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EvidenceFusion | DFIR Investigation Platform</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="theme-color" content="#08111f">
+    <title>EvidenceFusion | Investigation Workbench</title>
+    <link rel="stylesheet" href="/dashboard/static/style.css">
 </head>
 <body>
-    <header class="topbar">
-        <div class="brand">
-            <h1>EvidenceFusion</h1>
-            <p>DFIR Investigation Platform</p>
-        </div>
-        <div class="status">
-            <span class="status-dot"></span>
-            <span>System Ready</span>
-        </div>
-    </header>
-
-    <main class="dashboard">
-        <section class="summary-grid">
-            <div class="summary-card">
-                <p class="card-label">Total Incidents</p>
-                <h2 id="incident-count">0</h2>
+    <div class="app-shell">
+        <aside class="sidebar" aria-label="Main navigation">
+            <a class="brand-lockup" href="#overview" aria-label="EvidenceFusion home">
+                <span class="brand-mark">EF</span>
+                <span class="brand-copy"><strong>EvidenceFusion</strong><small>DFIR INVESTIGATION PLATFORM</small></span>
+            </a>
+            <p class="nav-label">WORKSPACE</p>
+            <nav class="side-nav">
+                <a class="nav-link active" href="#overview"><span class="nav-icon">?</span> Overview</a>
+                <a class="nav-link" href="#timeline-panel"><span class="nav-icon">?</span> Event timeline</a>
+                <a class="nav-link" href="#incidents-panel"><span class="nav-icon">?</span> Investigations</a>
+                <a class="nav-link" href="#mitre-panel"><span class="nav-icon">?</span> MITRE ATT&CK</a>
+            </nav>
+            <div class="sidebar-note">
+                <span class="sidebar-note-icon">?</span>
+                <div><strong>Evidence-first workflow</strong><p>Correlate events, inspect incidents, and review supporting evidence.</p></div>
             </div>
-            <div class="summary-card high-card">
-                <p class="card-label">High Severity</p>
-                <h2 id="high-count">0</h2>
-            </div>
-            <div class="summary-card">
-                <p class="card-label">Total Events</p>
-                <h2 id="event-count">0</h2>
-            </div>
-            <div class="summary-card">
-                <p class="card-label">MITRE Techniques</p>
-                <h2 id="technique-count">0</h2>
-            </div>
-        </section>
-
-        <section class="panel">
-            <div class="panel-header">
-                <div>
-                    <h2>Investigation Timeline</h2>
-                    <p>Chronological view of collected evidence</p>
+            <div class="sidebar-bottom"><span class="status-dot"></span><span>Local investigation workspace</span></div>
+        </aside>
+        <main class="main-area" id="overview">
+            <header class="topbar">
+                <div class="page-heading"><p class="eyebrow">DIGITAL FORENSICS & INCIDENT RESPONSE</p><h1>Investigation Workbench</h1><p class="page-subtitle">A unified view of normalized events, correlated incidents, and mapped techniques.</p></div>
+                <div class="topbar-actions"><div class="status"><span class="status-dot"></span><span>Connecting to API�</span></div><a class="topbar-link" href="#timeline-panel">Open timeline <span aria-hidden="true">?</span></a></div>
+            </header>
+            <div class="dashboard">
+            <section class="summary-grid" aria-label="Investigation summary">
+                <article class="summary-card"><div class="metric-top"><span class="metric-icon blue">?</span><span class="metric-caption">OBSERVED</span></div><p class="card-label">Total Events</p><h2 id="event-count">0</h2><p class="metric-footnote">Normalized records in the event store</p></article>
+                <article class="summary-card"><div class="metric-top"><span class="metric-icon violet">?</span><span class="metric-caption">CORRELATED</span></div><p class="card-label">Total Incidents</p><h2 id="incident-count">0</h2><p class="metric-footnote">Investigation clusters identified</p></article>
+                <article class="summary-card high-card"><div class="metric-top"><span class="metric-icon red">!</span><span class="metric-caption">PRIORITY</span></div><p class="card-label">High Severity</p><h2 id="high-count">0</h2><p class="metric-footnote">Incidents requiring closer review</p></article>
+                <article class="summary-card"><div class="metric-top"><span class="metric-icon teal">?</span><span class="metric-caption">THREAT CONTEXT</span></div><p class="card-label">MITRE Techniques</p><h2 id="technique-count">0</h2><p class="metric-footnote">Unique techniques mapped to incidents</p></article>
+            </section>
+            <section class="panel" id="timeline-panel">
+                <div class="panel-header"><div class="section-title-wrap"><span class="section-kicker">01 / EVENT REVIEW</span><h2>Investigation Timeline</h2><p>Filter and review normalized activity in chronological order.</p></div><span class="panel-chip">TIMELINE</span></div>
+                <form id="timeline-filters" class="incident-filters timeline-filters">
+                    <label><span>User</span><input id="timeline-filter-user" name="user" type="text" placeholder="Filter by user"></label>
+                    <label><span>Host</span><input id="timeline-filter-host" name="host" type="text" placeholder="Filter by host"></label>
+                    <label><span>Source</span><select id="timeline-filter-source" name="source"><option value="">All sources</option><option value="system">System</option><option value="network">Network</option><option value="email">Email</option><option value="incident_response">Incident response</option></select></label>
+                    <label><span>Start time</span><input id="timeline-filter-start" name="start_time" type="datetime-local"></label>
+                    <label><span>End time</span><input id="timeline-filter-end" name="end_time" type="datetime-local"></label>
+                    <div class="filter-actions"><button type="submit" class="filter-button">Apply filters</button><button type="button" id="reset-timeline-filters" class="filter-button secondary">Reset</button></div>
+                    <p id="timeline-filter-status" class="filter-status" aria-live="polite"></p>
+                </form>
+                <div id="timeline" class="timeline"><div class="empty-state">Loading investigation timeline�</div></div>
+            </section>
+            <section class="panel" id="incidents-panel">
+                <div class="panel-header"><div class="section-title-wrap"><span class="section-kicker">02 / CORRELATION</span><h2>Incident Investigations</h2><p>Select an incident to inspect correlated events, evidence, and context.</p></div><span class="panel-chip">CASE REVIEW</span></div>
+                <form id="incident-filters" class="incident-filters">
+                    <label><span>Severity</span><select id="filter-severity" name="severity"><option value="">All severities</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select></label>
+                    <label><span>Source</span><input id="filter-source" name="source" type="text" placeholder="e.g. network" maxlength="128"></label>
+                    <label><span>Minimum events</span><input id="filter-min-events" name="min_events" type="number" min="1" step="1" value="1" required></label>
+                    <div class="filter-actions"><button type="submit" class="filter-button">Apply filters</button><button type="button" id="reset-incident-filters" class="filter-button secondary">Reset</button></div>
+                    <p id="incident-filter-status" class="filter-status" aria-live="polite"></p>
+                </form>
+                <div id="incidents" class="incident-list"><div class="empty-state">Loading incidents�</div></div>
+            </section>
+            <section class="panel" id="mitre-panel">
+                <div class="panel-header">
+                    <div class="section-title-wrap">
+                        <span class="section-kicker">03 / THREAT CONTEXT</span>
+                        <h2>MITRE ATT&CK Mapping</h2>
+                        <p>Techniques identified from the incidents currently shown.</p>
+                    </div>
+                    <span class="panel-chip">ATT&CK</span>
                 </div>
-            </div>
-            <form id="timeline-filters" class="incident-filters timeline-filters">
-                <label>
-                    <span>User</span>
-                    <input id="timeline-filter-user" name="user" type="text"
-                           placeholder="Filter by user">
-                </label>
-                <label>
-                    <span>Host</span>
-                    <input id="timeline-filter-host" name="host" type="text"
-                           placeholder="Filter by host">
-                </label>
-                <label>
-                    <span>Source</span>
-                    <select id="timeline-filter-source" name="source">
-                        <option value="">All sources</option>
-                        <option value="system">System</option>
-                        <option value="network">Network</option>
-                        <option value="email">Email</option>
-                        <option value="incident_response">Incident response</option>
-                    </select>
-                </label>
-                <label>
-                    <span>Start time</span>
-                    <input id="timeline-filter-start" name="start_time"
-                           type="datetime-local">
-                </label>
-                <label>
-                    <span>End time</span>
-                    <input id="timeline-filter-end" name="end_time"
-                           type="datetime-local">
-                </label>
-                <div class="filter-actions">
-                    <button type="submit" class="filter-button">Apply filters</button>
-                    <button type="button" id="reset-timeline-filters"
-                            class="filter-button secondary">Reset</button>
+                <div id="mitre-techniques" class="technique-list">
+                    <div class="empty-state">Loading technique mappings�</div>
                 </div>
-                <p id="timeline-filter-status" class="filter-status"
-                   aria-live="polite"></p>
-            </form>
-            <div id="timeline" class="timeline">
-                <div class="empty-state">No investigation data loaded.</div>
-            </div>
-        </section>
-
-        <section class="panel">
-            <div class="panel-header">
-                <div>
-                    <h2>Active Incidents</h2>
-                    <p>Correlated evidence grouped into incidents</p>
+            </section>
+            <section class="panel" id="mitre-review-panel">
+                <div class="panel-header">
+                    <div class="section-title-wrap">
+                        <span class="section-kicker">04 / INVESTIGATION REVIEW</span>
+                        <h2>MITRE Assessment Review</h2>
+                        <p>
+                            Review indicators, reasons, and recommended investigative
+                            actions. Indicators alone do not confirm malicious activity.
+                        </p>
+                    </div>
+                    <span class="panel-chip">TRIAGE</span>
                 </div>
-            </div>
-
-            <form id="incident-filters" class="incident-filters">
-                <label>
-                    <span>Severity</span>
-                    <select id="filter-severity" name="severity">
-                        <option value="">All severities</option>
-                        <option value="High">High</option>
-                        <option value="Medium">Medium</option>
-                        <option value="Low">Low</option>
-                    </select>
-                </label>
-                <label>
-                    <span>Source</span>
-                    <input id="filter-source" name="source" type="text"
-                           placeholder="e.g. network" maxlength="128">
-                </label>
-                <label>
-                    <span>Minimum events</span>
-                    <input id="filter-min-events" name="min_events" type="number"
-                           min="1" step="1" value="1" required>
-                </label>
-                <div class="filter-actions">
-                    <button type="submit" class="filter-button">Apply filters</button>
-                    <button type="button" id="reset-incident-filters"
-                            class="filter-button secondary">Reset</button>
+                <div id="mitre-assessments" class="assessment-list">
+                    <div class="empty-state">Loading assessment results�</div>
                 </div>
-                <p id="incident-filter-status" class="filter-status" aria-live="polite"></p>
-            </form>
-
-            <div id="incidents" class="incident-list">
-                <div class="empty-state">No incidents loaded.</div>
+            </section>
             </div>
-        </section>
-
-        <section class="panel">
-            <div class="panel-header">
-                <div>
-                    <h2>MITRE ATT&CK</h2>
-                    <p>Techniques identified from correlated evidence</p>
-                </div>
-            </div>
-            <div id="mitre-techniques" class="technique-list">
-                <div class="empty-state">No techniques loaded.</div>
-            </div>
-        </section>
-    </main>
-
-    <footer class="footer">
-        <p>EvidenceFusion &mdash; Automated Multi-Source Digital Evidence Correlation for DFIR Investigations</p>
-    </footer>
-
-    <script src="app.js"></script>
+            <footer class="footer">
+                <span>EvidenceFusion</span>
+                <span>Automated Multi-Source Digital Evidence Correlation for DFIR Investigations</span>
+            </footer>
+        </main>
+    </div>
+    <script src="/dashboard/static/app.js"></script>
 </body>
 </html>

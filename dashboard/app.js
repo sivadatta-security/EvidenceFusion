@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://127.0.0.1:8000";
+﻿const API_BASE_URL = "http://127.0.0.1:8000";
 
 /* =========================
    API REQUEST HELPER
@@ -249,9 +249,169 @@ function renderMitreTechniques(incidents) {
 }
 
 /* =========================
-   INCIDENT EVIDENCE
+   RENDER MITRE ASSESSMENTS
    ========================= */
 
+function renderMitreAssessments(incidents) {
+    const container = document.getElementById("mitre-assessments");
+    if (!container) return;
+
+    const assessments = [];
+    const seen = new Set();
+
+    (incidents ?? []).forEach(incident => {
+        const result = incident.mitre_assessment ?? {};
+
+        (result.assessments ?? []).forEach(assessment => {
+            const key = `${incident.incident_id}:${assessment.event_id ?? "unknown"}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            assessments.push({
+                ...assessment,
+                incident_id: incident.incident_id
+            });
+        });
+    });
+
+    const counts = assessments.reduce((totals, item) => {
+        const status = item.status ?? "no_assessment";
+        totals[status] = (totals[status] ?? 0) + 1;
+        return totals;
+    }, {});
+
+    const summary = `
+        <div class="assessment-summary" aria-label="Assessment counts">
+            <span>Mapped: ${counts.mapped ?? 0}</span>
+            <span>Needs review: ${counts.needs_review ?? 0}</span>
+            <span>No assessment: ${counts.no_assessment ?? 0}</span>
+        </div>
+    `;
+
+    if (!assessments.length) {
+        container.innerHTML = summary + `
+            <div class="empty-state">
+                No event assessments are available for the displayed incidents.
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = summary + assessments.map(item => {
+        const status = String(item.status ?? "unknown");
+        const statusLabels = {
+            mapped: "Explicit mapping",
+            needs_review: "Needs review",
+            no_assessment: "No assessment",
+            excluded: "Excluded"
+        };
+        const statusLabel = statusLabels[status] ?? status.replace(/_/g, " ");
+        const indicators = (item.indicators ?? []).length
+            ? item.indicators.map(value => `
+                <span class="assessment-indicator">${escapeHtml(value)}</span>
+            `).join("")
+            : '<span class="muted-text">None recorded</span>';
+        const technique = item.technique_id
+            ? `<p><strong>Technique:</strong> ${escapeHtml(item.technique_id)} — ${escapeHtml(item.technique_name ?? "Name unavailable")}</p>`
+            : '<p><strong>Technique:</strong> Not assigned</p>';
+                    return `
+            <article class="assessment-card">
+                <div class="assessment-card-header">
+                    <div>
+                        <h3>${escapeHtml(item.event_id ?? "Unknown event")}</h3>
+                        <p>Incident ${escapeHtml(item.incident_id ?? "Unknown")}</p>
+                    </div>
+
+                    <span class="assessment-status assessment-status-${escapeHtml(status)}">
+                        ${escapeHtml(statusLabel)}
+                    </span>
+                </div>
+
+                ${technique}
+
+                <p><strong>Reason</strong></p>
+                <p>${escapeHtml(item.reason ?? "No reason supplied.")}</p>
+
+                <p><strong>Indicators</strong></p>
+                <div class="assessment-indicators">${indicators}</div>
+
+                <p><strong>Recommended action</strong></p>
+                <p>${escapeHtml(item.recommended_action ?? "Review the source evidence.")}</p>
+            </article>
+        `;
+    }).join("");
+}
+
+/* =========================
+   INCIDENT ASSESSMENT DETAILS
+   ========================= */
+
+function renderIncidentAssessmentDetails(incident) {
+    const result = incident.mitre_assessment ?? {};
+    const assessments = result.assessments ?? [];
+
+    if (!assessments.length) {
+        return `
+            <div class="empty-state">
+                No assessment details are available for this incident.
+            </div>
+        `;
+    }
+
+    return assessments.map(item => {
+        const status = String(item.status ?? "unknown");
+
+        const statusLabels = {
+            mapped: "Explicit mapping",
+            needs_review: "Needs review",
+            no_assessment: "No assessment",
+            excluded: "Excluded"
+        };
+
+        const indicators = (item.indicators ?? []).length
+            ? item.indicators.map(value => `
+                <span class="assessment-indicator">
+                    ${escapeHtml(value)}
+                </span>
+            `).join("")
+            : '<span class="muted-text">None recorded</span>';
+
+        return `
+            <article class="assessment-card">
+                <div class="assessment-card-header">
+                    <div>
+                        <h4>${escapeHtml(item.event_id ?? "Unknown event")}</h4>
+                    </div>
+
+                    <span class="assessment-status assessment-status-${escapeHtml(status)}">
+                        ${escapeHtml(
+                            statusLabels[status] ?? status.replace(/_/g, " ")
+                        )}
+                    </span>
+                </div>
+
+                <p>
+                    <strong>Technique:</strong>
+                    ${
+                        item.technique_id
+                            ? `${escapeHtml(item.technique_id)} — ${escapeHtml(item.technique_name ?? "Name unavailable")}`
+                            : "Not assigned"
+                    }
+                </p>
+
+                <p><strong>Reason:</strong> ${escapeHtml(item.reason ?? "No reason supplied.")}</p>
+
+                <p><strong>Indicators:</strong></p>
+                <div class="assessment-indicators">${indicators}</div>
+
+                <p><strong>Recommended action:</strong> ${escapeHtml(item.recommended_action ?? "Review the source evidence.")}</p>
+            </article>
+        `;
+    }).join("");
+}
+
+/* =========================
+   INCIDENT EVIDENCE
+   ========================= */
 
 function renderIncidentEvidence(evidence) {
     const container = document.getElementById(
@@ -264,8 +424,6 @@ function renderIncidentEvidence(evidence) {
         container.innerHTML = `
             <div class="empty-state">
                 No evidence has been linked to this incident yet.
-                Link evidence to one of the incident's events through
-                the API to display it here.
             </div>
         `;
         return;
@@ -345,6 +503,7 @@ function renderIncidentEvidence(evidence) {
 
                 <div class="evidence-links">
                     <strong>Linked Events (${links.length})</strong>
+
                     ${
                         links.length
                             ? `
@@ -432,7 +591,7 @@ async function verifyEvidenceIntegrity(evidenceId, button) {
             );
         }
 
-        const result = data.verification;
+        const result = data.verification ?? {};
         const status = String(
             result.verification_status ?? "unavailable"
         ).toLowerCase();
@@ -458,7 +617,6 @@ async function verifyEvidenceIntegrity(evidenceId, button) {
             `Expected SHA-256: ${result.expected_sha256 ?? "Unavailable"}. ` +
             `Calculated SHA-256: ${result.calculated_sha256 ?? "Unavailable"}.`;
 
-        // Refresh custody history so the new attempt appears immediately.
         const custodyButton = card.querySelector('[data-action="custody"]');
 
         if (custodyButton) {
@@ -466,6 +624,7 @@ async function verifyEvidenceIntegrity(evidenceId, button) {
         }
     } catch (error) {
         console.error("Evidence verification failed:", error);
+
         message.textContent =
             `Could not complete verification: ${error.message}`;
     } finally {
@@ -485,6 +644,8 @@ async function loadEvidenceCustody(evidenceId, button) {
     const panel = card.querySelector("[data-custody-panel]");
     const content = card.querySelector("[data-custody-content]");
 
+    if (!panel || !content) return;
+
     panel.open = true;
     content.textContent = "Loading custody history...";
     button.disabled = true;
@@ -498,7 +659,9 @@ async function loadEvidenceCustody(evidenceId, button) {
 
         if (!entries.length) {
             content.innerHTML = `
-                <p class="empty-state">No custody audit entries found.</p>
+                <p class="empty-state">
+                    No custody audit entries found.
+                </p>
             `;
             return;
         }
@@ -506,14 +669,18 @@ async function loadEvidenceCustody(evidenceId, button) {
         content.innerHTML = entries.map(entry => `
             <article class="custody-entry">
                 <h4>${escapeHtml(entry.action)}</h4>
+
                 <div class="event-fields">
                     ${formatField("Audit ID", entry.audit_id)}
                     ${formatField("Investigator", entry.actor)}
                     ${formatField(
                         "Recorded At",
-                        new Date(entry.occurred_at).toLocaleString()
+                        entry.occurred_at
+                            ? new Date(entry.occurred_at).toLocaleString()
+                            : "Unavailable"
                     )}
                 </div>
+
                 <details>
                     <summary>Audit details</summary>
                     <pre>${escapeHtml(
@@ -524,6 +691,7 @@ async function loadEvidenceCustody(evidenceId, button) {
         `).join("");
     } catch (error) {
         console.error("Failed to load custody history:", error);
+
         content.textContent =
             `Could not load custody history: ${error.message}`;
     } finally {
@@ -532,453 +700,318 @@ async function loadEvidenceCustody(evidenceId, button) {
 }
 
 
-async function loadDashboard() {
-    const status = document.querySelector(".status span:last-child");
+    /* =========================
+    INCIDENT DETAILS
+    ========================= */
 
-    try {
-        const [events, timeline, incidents, summary] = await Promise.all([
-            loadEvents(),
-            loadTimeline(),
-            loadIncidents(),
-            fetchApi("/dashboard/summary")
-        ]);
+    async function openIncident(incidentId) {
+        const modal = document.getElementById("incident-modal");
+        const content = document.getElementById("incident-details");
 
-        updateSummary(events, incidents, summary);
-        renderTimeline(timeline);
-        renderIncidents(incidents);
-        renderMitreTechniques(incidents);
-
-        if (status) {
-            status.textContent = "System Connected";
-        }
-    } catch (error) {
-        console.error("Failed to load dashboard:", error);
-
-        if (status) {
-            status.textContent = "API Unavailable";
+        if (!modal || !content) {
+            console.error("Incident detail modal elements were not found.");
+            return;
         }
 
-        document.getElementById("timeline").innerHTML = `
-            <div class="empty-state">
-                Unable to connect to EvidenceFusion API.
-                Make sure the backend is running.
-            </div>
-        `;
+    modal.classList.add("open");
+    content.innerHTML = `
+        <div class="loading-state">Loading incident details...</div>
+    `;
 
-        document.getElementById("incidents").innerHTML = `
-            <div class="empty-state">
-                Incident data could not be loaded.
-            </div>
-        `;
-
-        document.getElementById("mitre-techniques").innerHTML = `
-            <div class="empty-state">
-                Threat analysis data could not be loaded.
-            </div>
-        `;
-    }
-}
-
-/* =========================
-   OPEN INCIDENT DETAILS
-   ========================= */
-
-async function openIncident(incidentId) {
     try {
         const incident = await fetchApi(
             `/incidents/${encodeURIComponent(incidentId)}`
         );
 
-        await showIncidentDetails(incident);
+        const events = incident.events ?? [];
+        const techniques = incident.mitre_techniques ?? [];
+
+        content.innerHTML = `
+            <div class="incident-detail-header">
+                <h2>${escapeHtml(incident.incident_id)}</h2>
+                <span class="severity severity-${escapeHtml(
+                    String(incident.severity ?? "unknown").toLowerCase()
+                )}">
+                    ${escapeHtml(incident.severity ?? "Unknown")}
+                </span>
+            </div>
+
+            <p>${escapeHtml(
+                incident.description ?? "No description available."
+            )}</p>
+
+            <div class="event-fields">
+                ${formatField("Incident ID", incident.incident_id)}
+                ${formatField("Severity", incident.severity)}
+                ${formatField("Event Count", events.length)}
+                ${formatField("Sources", (incident.sources ?? []).join(", "))}
+                ${formatField("Correlation Score", incident.max_correlation_score)}
+            </div>
+
+            <section class="incident-detail-section">
+                <h3>Correlated Events</h3>
+                ${
+                    events.length
+                        ? events.map(event => `
+                            <article class="event-detail-card">
+                                <h4>${escapeHtml(event.event_id)}</h4>
+                                <div class="event-fields">
+                                    ${formatField("Type", event.event_type)}
+                                    ${formatField("Timestamp", event.timestamp)}
+                                    ${formatField("Source", event.source)}
+                                    ${formatField("User", event.user)}
+                                    ${formatField("Host", event.host)}
+                                    ${formatField("Source IP", event.source_ip)}
+                                    ${formatField("Destination IP", event.destination_ip)}
+                                    ${formatField("Domain", event.domain)}
+                                </div>
+                                <p>${escapeHtml(event.description)}</p>
+                            </article>
+                        `).join("")
+                        : `<p class="empty-state">No event details returned.</p>`
+                }
+            </section>
+
+            <section class="incident-detail-section">
+                <h3>MITRE ATT&amp;CK Techniques</h3>
+                ${
+                    techniques.length
+                        ? techniques.map(technique => `
+                            <article class="technique-card">
+                                <h4>
+                                    ${escapeHtml(technique.technique_id)}
+                                    — ${escapeHtml(technique.technique_name)}
+                                </h4>
+                                <p>${escapeHtml(
+                                    technique.description ?? ""
+                                )}</p>
+                                <p>
+                                    Supporting events:
+                                    ${escapeHtml(
+                                        (technique.event_ids ?? []).join(", ")
+                                    )}
+                                </p>
+                            </article>
+                        `).join("")
+                        : `<p class="empty-state">
+                            No ATT&amp;CK techniques have been assigned.
+                        </p>`
+                }
+            </section>
+
+            <section class="incident-detail-section">
+                <h3>MITRE Assessment Review</h3>
+                <p class="muted-text">
+                    Assessment indicators are investigative leads, not proof
+                    of malicious activity. Validate them against original
+                    evidence and corroborating sources.
+                </p>
+                ${renderIncidentAssessmentDetails(incident)}
+            </section>
+        `;
+
+        await loadIncidentEvidence(incidentId);
     } catch (error) {
-        console.error("Failed to load incident:", error);
-        alert("Unable to load incident details. Check the API.");
+        console.error("Failed to load incident details:", error);
+
+        content.innerHTML = `
+            <div class="error-message">
+                Could not load incident details:
+                ${escapeHtml(error.message)}
+            </div>
+        `;
     }
 }
 
+
 /* =========================
-   INCIDENT DETAIL VIEW
+   INCIDENT EVIDENCE LOADING
    ========================= */
 
-async function showIncidentDetails(incident) {
-    const existingPanel = document.getElementById(
-        "incident-detail-panel"
-    );
-
-    if (existingPanel) {
-        existingPanel.remove();
-    }
-
-    const dashboard = document.querySelector(".dashboard");
-
-    if (!dashboard) {
-        console.error("Dashboard container was not found.");
-        return;
-    }
-
-    const panel = document.createElement("section");
-    panel.id = "incident-detail-panel";
-    panel.className = "panel incident-detail-panel";
-
-    dashboard.prepend(panel);
-
-    const severity = String(
-        incident.severity ?? "unknown"
-    ).toLowerCase();
-
-    const techniques = incident.mitre_techniques ?? [];
-
-    const techniquesHtml = techniques.length
-        ? techniques.map(technique => `
-            <article class="technique-card">
-                <div class="technique-id">
-                    ${escapeHtml(technique.technique_id)}
-                </div>
-
-                <div class="technique-name">
-                    ${escapeHtml(technique.technique_name)}
-                </div>
-
-                <div class="technique-events">
-                    Supporting events:
-                    ${escapeHtml(
-                        (technique.event_ids ?? []).join(", ")
-                    )}
-                </div>
-            </article>
-        `).join("")
-        : `
-            <div class="empty-state">
-                No MITRE ATT&CK techniques identified.
-            </div>
-        `;
-
-    panel.innerHTML = `
-        <div class="panel-header">
-            <div>
-                <h2>Incident ${escapeHtml(incident.incident_id)}</h2>
-                <p>Detailed investigation and evidence view</p>
-            </div>
-
-            <button
-                type="button"
-                class="close-button"
-                onclick="closeIncidentDetails()"
-            >
-                Close
-            </button>
-        </div>
-
-        <div class="incident-detail-content">
-            <div class="detail-summary">
-                <div class="detail-box">
-                    <span>Severity</span>
-                    <strong>
-                        <span class="severity severity-${escapeHtml(severity)}">
-                            ${escapeHtml(incident.severity)}
-                        </span>
-                    </strong>
-                </div>
-
-                <div class="detail-box">
-                    <span>Correlation Score</span>
-                    <strong>${escapeHtml(incident.max_correlation_score)}</strong>
-                </div>
-
-                <div class="detail-box">
-                    <span>Event Count</span>
-                    <strong>${escapeHtml(incident.event_count)}</strong>
-                </div>
-
-                <div class="detail-box">
-                    <span>Sources</span>
-                    <strong>
-                        ${escapeHtml((incident.sources ?? []).join(", "))}
-                    </strong>
-                </div>
-            </div>
-
-            <div class="detail-section">
-                <h3>Investigation Window</h3>
-                <p>
-                    First seen:
-                    ${escapeHtml(
-                        incident.first_seen
-                            ? new Date(incident.first_seen).toLocaleString()
-                            : "Not available"
-                    )}
-                </p>
-                <p>
-                    Last seen:
-                    ${escapeHtml(
-                        incident.last_seen
-                            ? new Date(incident.last_seen).toLocaleString()
-                            : "Not available"
-                    )}
-                </p>
-            </div>
-
-            <div class="detail-section">
-                <h3>Correlated Events</h3>
-                <div id="incident-events-content">
-                    <p>Loading event records...</p>
-                </div>
-            </div>
-
-            <div class="detail-section">
-                <h3>Supporting Digital Evidence</h3>
-                <p class="section-description">
-                    Artifacts associated with the events in this incident.
-                </p>
-                <div id="incident-evidence-content">
-                    <p>Loading evidence records...</p>
-                </div>
-            </div>
-
-            <div class="detail-section">
-                <h3>MITRE ATT&CK</h3>
-                <div class="technique-list">
-                    ${techniquesHtml}
-                </div>
-            </div>
-        </div>
-    `;
-
-    panel.scrollIntoView({
-        behavior: "smooth",
-        block: "start"
-    });
-
-    const eventsContainer = document.getElementById(
-        "incident-events-content"
-    );
-
-    const evidenceContainer = document.getElementById(
+async function loadIncidentEvidence(incidentId) {
+    const container = document.getElementById(
         "incident-evidence-content"
     );
 
-    try {
-        const [events, evidenceResult] = await Promise.all([
-            fetchApi("/events"),
-            fetchApi(
-                `/incidents/${encodeURIComponent(incident.incident_id)}/evidence`
-            )
-        ]);
+    if (!container) return;
 
-        const incidentEventIds = new Set(incident.event_ids ?? []);
-
-        const matchedEvents = events.filter(event =>
-            incidentEventIds.has(event.event_id)
-        );
-
-        if (eventsContainer) {
-            eventsContainer.innerHTML = matchedEvents.length
-                ? matchedEvents.map(event => `
-                    <article class="detail-event">
-                        <h4>${escapeHtml(event.event_id)}</h4>
-
-                        <div class="event-fields">
-                            ${formatField("Timestamp", event.timestamp)}
-                            ${formatField("Source", event.source)}
-                            ${formatField("Event Type", event.event_type)}
-                            ${formatField("User", event.user)}
-                            ${formatField("Host", event.host)}
-                            ${formatField("Source IP", event.source_ip)}
-                            ${formatField("Destination IP", event.destination_ip)}
-                            ${formatField("Domain", event.domain)}
-                            ${formatField("Artifact", event.artifact)}
-                            ${formatField("Hash", event.hash)}
-                            ${formatField("Description", event.description)}
-                            ${formatField("Confidence", event.confidence)}
-                        </div>
-                    </article>
-                `).join("")
-                : `
-                    <div class="empty-state">
-                        No matching event records were found.
-                    </div>
-                `;
-        }
-
-        renderIncidentEvidence(evidenceResult.evidence ?? []);
-    } catch (error) {
-        console.error(
-            "Failed to load incident events or evidence:",
-            error
-        );
-
-        if (eventsContainer) {
-            eventsContainer.innerHTML = `
-                <div class="empty-state">
-                    Unable to load event records.
-                </div>
-            `;
-        }
-
-        if (evidenceContainer) {
-            evidenceContainer.innerHTML = `
-                <div class="empty-state">
-                    Unable to load incident evidence.
-                    Check the API and its incident evidence endpoint.
-                </div>
-            `;
-        }
-    }
-}
-
-/* =========================
-   CLOSE INCIDENT DETAILS
-   ========================= */
-
-function closeIncidentDetails() {
-    const panel = document.getElementById("incident-detail-panel");
-
-    if (panel) {
-        panel.remove();
-    }
-}
-
-/* =========================
-   INCIDENT FILTERS
-   ========================= */
-
-function readIncidentFilters() {
-    const severity = document.getElementById("filter-severity").value;
-    const source = document.getElementById("filter-source").value.trim();
-    const minEvents = document.getElementById("filter-min-events").value;
-
-    return {
-        severity,
-        source,
-        min_events: minEvents || "1"
-    };
-}
-
-async function applyIncidentFilters() {
-    const container = document.getElementById("incidents");
-    const filterStatus = document.getElementById("incident-filter-status");
-
-    container.innerHTML = '<div class="empty-state">Loading filtered incidents...</div>';
-    filterStatus.textContent = "Applying filters...";
+    container.innerHTML = `
+        <div class="loading-state">Loading linked evidence...</div>
+    `;
 
     try {
-        const incidents = await loadIncidents(readIncidentFilters());
-        renderIncidents(incidents);
-        filterStatus.textContent = `${incidents.length} incident(s) match the selected filters.`;
+        const result = await fetchApi(
+            `/incidents/${encodeURIComponent(incidentId)}/evidence`
+        );
+
+        renderIncidentEvidence(result.evidence ?? []);
     } catch (error) {
-        console.error("Failed to filter incidents:", error);
+        // The incident details remain available even if the evidence
+        // endpoint has not been implemented or returns an error.
+        console.warn("Incident evidence could not be loaded:", error);
+
         container.innerHTML = `
             <div class="empty-state">
-                Could not load filtered incidents. Check the API connection and try again.
+                Evidence could not be loaded for this incident.
+                ${escapeHtml(error.message)}
             </div>
         `;
-        filterStatus.textContent = `Filter request failed: ${error.message}`;
     }
 }
 
-function setupIncidentFilters() {
-    const form = document.getElementById("incident-filters");
-    const resetButton = document.getElementById("reset-incident-filters");
-
-    if (!form || !resetButton) return;
-
-    form.addEventListener("submit", async event => {
-        event.preventDefault();
-
-        const minEvents = Number(document.getElementById("filter-min-events").value);
-        if (!Number.isInteger(minEvents) || minEvents < 1) {
-            document.getElementById("incident-filter-status").textContent =
-                "Minimum events must be a whole number greater than or equal to 1.";
-            return;
-        }
-
-        await applyIncidentFilters();
-    });
-
-    resetButton.addEventListener("click", async () => {
-        form.reset();
-        document.getElementById("filter-min-events").value = "1";
-        await applyIncidentFilters();
-    });
-}
 
 /* =========================
-   TIMELINE FILTERS
+   CLOSE INCIDENT MODAL
    ========================= */
 
-function readTimelineFilters() {
-    const value = id => document.getElementById(id).value.trim();
+function closeIncidentModal() {
+    const modal = document.getElementById("incident-modal");
 
-    function toUtcTimestamp(id) {
-        const raw = value(id);
-        if (!raw) return "";
-
-        const date = new Date(raw);
-        if (Number.isNaN(date.getTime())) {
-            throw new Error("Enter a valid start and end date/time.");
-        }
-
-        return date.toISOString();
+    if (modal) {
+        modal.classList.remove("open");
     }
-
-    return {
-        user: value("timeline-filter-user"),
-        host: value("timeline-filter-host"),
-        source: value("timeline-filter-source"),
-        start_time: toUtcTimestamp("timeline-filter-start"),
-        end_time: toUtcTimestamp("timeline-filter-end")
-    };
 }
 
-async function applyTimelineFilters() {
-    const status = document.getElementById("timeline-filter-status");
-    const container = document.getElementById("timeline");
+
+/* =========================
+   APPLY INCIDENT FILTERS
+   ========================= */
+
+async function applyIncidentFilters() {
+    const severityElement = document.getElementById("severity-filter");
+    const sourceElement = document.getElementById("source-filter");
+    const minEventsElement = document.getElementById("min-events-filter");
+
+    const filters = {
+        severity: severityElement?.value || "",
+        source: sourceElement?.value || "",
+        min_events: minEventsElement?.value || ""
+    };
 
     try {
-        const filters = readTimelineFilters();
+        const incidents = await loadIncidents(filters);
 
-        if (
-            filters.start_time &&
-            filters.end_time &&
-            new Date(filters.start_time) > new Date(filters.end_time)
-        ) {
-            throw new Error("Start time must be earlier than or equal to end time.");
+        renderIncidents(incidents);
+        renderMitreTechniques(incidents);
+        renderMitreAssessments(incidents);
+    } catch (error) {
+        console.error("Failed to apply incident filters:", error);
+
+        const incidentContainer = document.getElementById("incidents");
+
+        if (incidentContainer) {
+            incidentContainer.innerHTML = `
+                <div class="error-message">
+                    Could not filter incidents:
+                    ${escapeHtml(error.message)}
+                </div>
+            `;
         }
 
-        status.textContent = "Applying timeline filters...";
-        const events = await loadTimeline(filters);
-        renderTimeline(events);
-        status.textContent = `${events.length} event(s) match the selected filters.`;
-    } catch (error) {
-        console.error("Failed to filter timeline:", error);
-        status.textContent = `Filter request failed: ${error.message}`;
+        const assessmentContainer = document.getElementById(
+            "mitre-assessments"
+        );
 
-        if (error.message.includes("422")) {
-            status.textContent += " Check the selected time range and filter values.";
+        if (assessmentContainer) {
+            assessmentContainer.innerHTML = `
+                <div class="error-message">
+                    Assessment results could not be refreshed.
+                </div>
+            `;
         }
     }
 }
 
-function setupTimelineFilters() {
-    const form = document.getElementById("timeline-filters");
-    const resetButton = document.getElementById("reset-timeline-filters");
 
-    if (!form || !resetButton) return;
+/* =========================
+   DASHBOARD REFRESH
+   ========================= */
 
-    form.addEventListener("submit", async event => {
-        event.preventDefault();
-        await applyTimelineFilters();
-    });
+async function loadDashboard() {
+    try {
+        const [events, incidents] = await Promise.all([
+            loadEvents(),
+            loadIncidents()
+        ]);
 
-    resetButton.addEventListener("click", async () => {
-        form.reset();
-        await applyTimelineFilters();
-    });
+        renderTimeline(events);
+        renderIncidents(incidents);
+        renderMitreTechniques(incidents);
+        renderMitreAssessments(incidents);
+        updateSummary(events, incidents);
+    } catch (error) {
+        console.error("Dashboard loading failed:", error);
+
+        const timeline = document.getElementById("timeline");
+        const incidents = document.getElementById("incidents");
+        const assessments = document.getElementById("mitre-assessments");
+
+        if (timeline) {
+            timeline.innerHTML = `
+                <div class="error-message">
+                    Could not load timeline data.
+                    ${escapeHtml(error.message)}
+                </div>
+            `;
+        }
+
+        if (incidents) {
+            incidents.innerHTML = `
+                <div class="error-message">
+                    Could not load incidents.
+                </div>
+            `;
+        }
+
+        if (assessments) {
+            assessments.innerHTML = `
+                <div class="error-message">
+                    MITRE assessments could not be loaded.
+                </div>
+            `;
+        }
+    }
 }
+
+
 /* =========================
    INITIALIZE DASHBOARD
    ========================= */
 
-setupTimelineFilters();
-setupIncidentFilters();
-loadDashboard();
+document.addEventListener("DOMContentLoaded", () => {
+    const refreshButton = document.getElementById("refresh-dashboard");
+
+    if (refreshButton) {
+        refreshButton.addEventListener("click", loadDashboard);
+    }
+
+    const filterButton = document.getElementById("apply-filters");
+
+    if (filterButton) {
+        filterButton.addEventListener("click", applyIncidentFilters);
+    }
+
+    const closeButton = document.getElementById("close-incident-modal");
+
+    if (closeButton) {
+        closeButton.addEventListener("click", closeIncidentModal);
+    }
+
+    const modal = document.getElementById("incident-modal");
+
+    if (modal) {
+        modal.addEventListener("click", event => {
+            if (event.target === modal) {
+                closeIncidentModal();
+            }
+        });
+    }
+
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape") {
+            closeIncidentModal();
+        }
+    });
+
+    loadDashboard();
+});
