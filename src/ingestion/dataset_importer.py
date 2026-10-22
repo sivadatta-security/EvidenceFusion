@@ -28,6 +28,8 @@ NETWORK_QUOTAS = {
     "SQL_INJECTION": 5,
 }
 EMAIL_QUOTAS = {"0": 50, "1": 50}
+LANL_SAMPLE_SIZE = 1000
+LANL_RANDOM_SEED = RANDOM_SEED + 2
 
 
 def clean_row(row):
@@ -192,11 +194,67 @@ def stable_event_id(dataset, row_number, row):
         ensure_ascii=False,
     )
     digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:20]
-    prefix = "CIC" if dataset == "CICIDS2017" else "FERB"
+    prefix = {"CICIDS2017": "CIC", "FERB": "FERB", "LANL_AUTH": "LANL"}[dataset]
     return f"{prefix}-{digest.upper()}"
 
 
-def build_records(network_path, email_path):
+
+def load_lanl_redteam_keys(path):
+    """Load documented LANL red-team tuples for cautious label matching."""
+    keys = set()
+    with Path(path).open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
+        for row in csv.reader(handle):
+            if len(row) < 4:
+                continue
+            time_value, user, source_computer, destination_computer = [
+                value.strip() for value in row[:4]
+            ]
+            if time_value and user and source_computer and destination_computer:
+                keys.add((time_value, user, source_computer, destination_computer))
+    return keys
+
+
+def sample_lanl_authentication(auth_path, redteam_path, limit=LANL_SAMPLE_SIZE):
+    """Reservoir-sample LANL auth rows; preserve relative time, not fake UTC."""
+    if limit < 1:
+        raise ValueError("LANL sample limit must be at least 1")
+    redteam_keys = load_lanl_redteam_keys(redteam_path)
+    rng = random.Random(LANL_RANDOM_SEED)
+    reservoir = []
+    seen = 0
+    with Path(auth_path).open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
+        for row_number, fields in enumerate(csv.reader(handle), start=1):
+            if len(fields) < 9:
+                continue
+            fields = [value.strip() for value in fields[:9]]
+            if not fields[0].isdigit():
+                continue
+            seen += 1
+            row = {
+                "time_seconds": fields[0],
+                "source_user": fields[1],
+                "destination_user": fields[2],
+                "source_computer": fields[3],
+                "destination_computer": fields[4],
+                "authentication_type": fields[5],
+                "logon_type": fields[6],
+                "authentication_orientation": fields[7],
+                "outcome": fields[8],
+            }
+            key = (fields[0], fields[1], fields[3], fields[4])
+            item = {"row_number": row_number, "row": row, "redteam_match": key in redteam_keys}
+            if len(reservoir) < limit:
+                reservoir.append(item)
+            else:
+                replacement = rng.randrange(seen)
+                if replacement < limit:
+                    reservoir[replacement] = item
+    if seen == 0:
+        raise ValueError("LANL authentication file contains no valid 9-column records")
+    return reservoir
+
+
+def build_records(network_path, email_path, lanl_auth_path=None, lanl_redteam_path=None):
     network = reservoir_sample(
         network_path,
         NETWORK_QUOTAS,
@@ -211,6 +269,9 @@ def build_records(network_path, email_path):
     )
 
     records = []
+
+    if bool(lanl_auth_path) != bool(lanl_redteam_path):
+        raise ValueError("--lanl-auth-csv and --lanl-redteam-csv must be supplied together")
 
     for item in network:
         row = item["row"]
@@ -250,6 +311,29 @@ def build_records(network_path, email_path):
                 metadata, sort_keys=True, ensure_ascii=False
             ),
         })
+
+
+    if lanl_auth_path and lanl_redteam_path:
+        for item in sample_lanl_authentication(lanl_auth_path, lanl_redteam_path):
+            row = item["row"]
+            redteam_match = item["redteam_match"]
+            metadata = dict(row)
+            metadata["redteam_reference_match"] = redteam_match
+            records.append({
+                "event_id": stable_event_id("LANL_AUTH", item["row_number"], row),
+                "dataset": "LANL_AUTH",
+                "source": "authentication",
+                "event_type": "auth_activity",
+                "original_label": "redteam_reference_match" if redteam_match else "no_exact_redteam_match",
+                "label_semantics": (
+                    "exact tuple match against LANL redteam reference; analyst validation required"
+                    if redteam_match
+                    else "no exact redteam tuple match; NOT a benign label"
+                ),
+                "source_row_number": item["row_number"],
+                "timestamp": None,
+                "metadata_json": json.dumps(metadata, sort_keys=True, ensure_ascii=False),
+            })
 
     return records
 
@@ -321,6 +405,11 @@ def create_database(output_path, records):
         )
 
         counts = Counter(record["dataset"] for record in records)
+        manifest_details = {
+            "CICIDS2017": ("CICIDS2017-thursday.pcap_ISCX.csv", RANDOM_SEED),
+            "FERB": ("ferb.csv", RANDOM_SEED + 1),
+            "LANL_AUTH": ("auth.txt + redteam.txt", LANL_RANDOM_SEED),
+        }
         connection.executemany(
             """
             INSERT INTO import_manifest (
@@ -329,20 +418,9 @@ def create_database(output_path, records):
             ) VALUES (?, ?, ?, ?, ?)
             """,
             [
-                (
-                    "CICIDS2017",
-                    "CICIDS2017-thursday.pcap_ISCX.csv",
-                    counts["CICIDS2017"],
-                    RANDOM_SEED,
-                    imported_at,
-                ),
-                (
-                    "FERB",
-                    "ferb.csv",
-                    counts["FERB"],
-                    RANDOM_SEED + 1,
-                    imported_at,
-                ),
+                (dataset, manifest_details[dataset][0], count,
+                 manifest_details[dataset][1], imported_at)
+                for dataset, count in sorted(counts.items())
             ],
         )
         connection.commit()
@@ -361,7 +439,7 @@ def create_database(output_path, records):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Create an isolated, reproducible 250-record dataset sample."
+        description="Create an isolated, reproducible security dataset sample."
     )
     parser.add_argument(
         "--network-csv",
@@ -374,6 +452,14 @@ def main(argv=None):
         help="Path to ferb.csv",
     )
     parser.add_argument(
+        "--lanl-auth-csv",
+        help="Optional headerless LANL auth.txt file",
+    )
+    parser.add_argument(
+        "--lanl-redteam-csv",
+        help="Optional headerless LANL redteam.txt reference file",
+    )
+    parser.add_argument(
         "--output",
         default=str(DEFAULT_OUTPUT),
         help=f"New output database (default: {DEFAULT_OUTPUT})",
@@ -381,7 +467,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
-        records = build_records(args.network_csv, args.email_csv)
+        records = build_records(args.network_csv, args.email_csv, args.lanl_auth_csv, args.lanl_redteam_csv)
         output = create_database(args.output, records)
     except (OSError, csv.Error, ValueError, sqlite3.Error) as exc:
         print(f"IMPORT FAILED: {exc}", file=sys.stderr)
@@ -393,8 +479,8 @@ def main(argv=None):
     )
     print(f"Created isolated sample database: {output}")
     print(f"Total records: {len(records)}")
-    print("CICIDS2017 records: 150")
-    print("FERB records: 100")
+    for dataset, count in sorted(Counter(record["dataset"] for record in records).items()):
+        print(f"{dataset} records: {count}")
     print("Network category counts:")
     for category, quota in NETWORK_QUOTAS.items():
         print(f"  {category}: {quota}")

@@ -208,6 +208,21 @@ python -m src.ingestion.dataset_importer --network-csv "PATH_TO_CICIDS2017_CSV" 
 
 These benchmark rows remain separate from the operational EvidenceFusion events table. FERB labels are preserved without assuming that `0` or `1` means malicious, and benchmark labels must not be treated as confirmed real-world incidents.
 
+### LANL authentication events (optional)
+
+The importer can also accept the Los Alamos National Laboratory (LANL) authentication log and its red-team reference file. Obtain these files from the official [LANL cyber-security dataset page](https://csr.lanl.gov/data/cyber1/); access terms and dataset documentation apply. Do not commit raw dataset files or credentials to this repository.
+
+The optional inputs are the headerless nine-column authentication log and the headerless four-column red-team reference file. Keep both files from the same dataset release. For example:
+
+```powershell
+python -m src.ingestion.dataset_importer --network-csv "PATH_TO_CICIDS2017_CSV" --email-csv "PATH_TO_FERB_CSV" --lanl-auth-csv "PATH_TO_LANL_auth.txt" --lanl-redteam-csv "PATH_TO_LANL_redteam.txt" --output "data/external_dataset_with_lanl.db"
+```
+
+The importer samples up to 1,000 authentication rows with a fixed seed and stores them in the same isolated benchmark database. LANL event times are retained as relative seconds in metadata, not converted to fabricated UTC timestamps. An exact red-team tuple match is only a reference annotation requiring analyst validation. A row without a match is explicitly **not** labelled benign. The API and dashboard discover available dataset names from the import manifest, so LANL_AUTH can be queried using GET /datasets/sample/records?dataset=LANL_AUTH.
+
+The LANL addition is optional; CICIDS2017 and FERB remain required inputs to the current combined importer. Importing LANL data does not automatically turn benchmark rows into operational incidents or evidence.
+
+
 ### VirusTotal lookups
 
 Set the API key in the current process environment; do not commit it to Git:
