@@ -282,3 +282,30 @@ The project is intended as an academic investigation platform. Its findings shou
 ### Incident report export
 
 Use `GET /incidents/{incident_id}/report?format=json` for a structured report snapshot or `GET /incidents/{incident_id}/report?format=markdown` to download a readable Markdown report. Reports include the incident summary, associated events, linked evidence, and an analyst-caution notice. Export is read-only and does not change evidence or investigation records. Validate all correlation and threat-intelligence conclusions against source evidence.
+
+## 15. Curated 100-case demo profile
+
+The project includes `src/demo/seed_demo.py`, which builds a **separate demo database** with exactly 100 investigation cases. The default profile uses up to 30 non-benign-labelled CICIDS2017 rows, 20 FERB rows, and 20 LANL authentication rows if LANL has been imported; it fills any unavailable allocation with clearly marked synthetic cases. Benchmark rows are review cases, not confirmed real-world incidents. FERB labels remain uninterpreted, and LANL relative timestamps are preserved in provenance rather than presented as verified UTC times.
+
+The demo seeder expects the isolated benchmark database at `data/external_dataset_demo.db` by default. Create it first with the existing importer. If you have the LANL pair, pass both LANL arguments; otherwise omit both:
+
+```powershell
+python -m src.ingestion.dataset_importer --network-csv "PATH_TO_CICIDS2017_CSV" --email-csv "PATH_TO_FERB_CSV" --output "data/external_dataset_demo.db"
+```
+
+Then build the demo database:
+
+```powershell
+python -m src.demo.seed_demo --dataset-db "data/external_dataset_demo.db" --output "data/evidencefusion_demo.db"
+```
+
+The seeder refuses to overwrite an existing output database. Choose a new output path if one already exists; do not delete your operational database or backups to retry.
+
+Run the application against the isolated demo database in the **same PowerShell window**:
+
+```powershell
+$env:EVIDENCEFUSION_DB_PATH = (Resolve-Path "data/evidencefusion_demo.db").Path
+python -m uvicorn src.api.main:app --reload
+```
+
+Open `http://127.0.0.1:8000/dashboard/`. The operational database remains unchanged. The demo contains 100 cases but not 100 confirmed incidents: benchmark observations are single-event review cases, while synthetic scenarios contain correlated event pairs. The synthetic companions are explicitly labelled in event descriptions. Use `GET /incidents` and `GET /dashboard/summary` to check the live result. Stop the server and remove the environment variable in that terminal with `Remove-Item Env:EVIDENCEFUSION_DB_PATH` when returning to the normal database.

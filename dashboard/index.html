@@ -16,14 +16,14 @@
             </a>
             <p class="nav-label">WORKSPACE</p>
             <nav class="side-nav">
-                <a class="nav-link active" href="#overview"><span class="nav-icon">?</span> Overview</a>
-                <a class="nav-link" href="#timeline-panel"><span class="nav-icon">?</span> Event timeline</a>
-                <a class="nav-link" href="#incidents-panel"><span class="nav-icon">?</span> Investigations</a>
-                <a class="nav-link" href="#mitre-panel"><span class="nav-icon">?</span> MITRE ATT&CK</a>
+                <a class="nav-link active" href="#overview"><span class="nav-icon" aria-hidden="true">⌂</span> Overview</a>
+                <a class="nav-link" href="#timeline-panel"><span class="nav-icon" aria-hidden="true">◷</span> Event timeline</a>
+                <a class="nav-link" href="#incidents-panel"><span class="nav-icon" aria-hidden="true">⌕</span> Investigations</a>
+                <a class="nav-link" href="#mitre-panel"><span class="nav-icon" aria-hidden="true">⬡</span> MITRE ATT&CK</a>
                 <a class="nav-link" href="#integrations-panel"><span class="nav-icon">+</span> Data & threat intel</a>
             </nav>
             <div class="sidebar-note">
-                <span class="sidebar-note-icon">?</span>
+                <span class="sidebar-note-icon" aria-hidden="true">✓</span>
                 <div><strong>Evidence-first workflow</strong><p>Correlate events, inspect incidents, and review supporting evidence.</p></div>
             </div>
             <div class="sidebar-bottom"><span class="status-dot"></span><span>Local investigation workspace</span></div>
@@ -31,14 +31,14 @@
         <main class="main-area" id="overview">
             <header class="topbar">
                 <div class="page-heading"><p class="eyebrow">DIGITAL FORENSICS & INCIDENT RESPONSE</p><h1>Investigation Workbench</h1><p class="page-subtitle">A unified view of normalized events, correlated incidents, and mapped techniques.</p></div>
-                <div class="topbar-actions"><div class="status"><span class="status-dot"></span><span>Connecting to API�</span></div><a class="topbar-link" href="#timeline-panel">Open timeline <span aria-hidden="true">?</span></a></div>
+                <div class="topbar-actions"><div class="status"><span class="status-dot"></span><span>Connecting to API</span></div><a class="topbar-link" href="#timeline-panel">Open timeline <span aria-hidden="true">→</span></a></div>
             </header>
             <div class="dashboard">
             <section class="summary-grid" aria-label="Investigation summary">
-                <article class="summary-card"><div class="metric-top"><span class="metric-icon blue">?</span><span class="metric-caption">OBSERVED</span></div><p class="card-label">Total Events</p><h2 id="event-count">0</h2><p class="metric-footnote">Normalized records in the event store</p></article>
-                <article class="summary-card"><div class="metric-top"><span class="metric-icon violet">?</span><span class="metric-caption">CORRELATED</span></div><p class="card-label">Total Incidents</p><h2 id="incident-count">0</h2><p class="metric-footnote">Investigation clusters identified</p></article>
+                <article class="summary-card"><div class="metric-top"><span class="metric-icon blue" aria-hidden="true">▤</span><span class="metric-caption">OBSERVED</span></div><p class="card-label">Total Events</p><h2 id="event-count">0</h2><p class="metric-footnote">Normalized records in the event store</p></article>
+                <article class="summary-card"><div class="metric-top"><span class="metric-icon violet" aria-hidden="true">◎</span><span class="metric-caption">CORRELATED</span></div><p class="card-label">Total Incidents</p><h2 id="incident-count">0</h2><p class="metric-footnote">Investigation clusters identified</p></article>
                 <article class="summary-card high-card"><div class="metric-top"><span class="metric-icon red">!</span><span class="metric-caption">PRIORITY</span></div><p class="card-label">High Severity</p><h2 id="high-count">0</h2><p class="metric-footnote">Incidents requiring closer review</p></article>
-                <article class="summary-card"><div class="metric-top"><span class="metric-icon teal">?</span><span class="metric-caption">THREAT CONTEXT</span></div><p class="card-label">MITRE Techniques</p><h2 id="technique-count">0</h2><p class="metric-footnote">Unique techniques mapped to incidents</p></article>
+                <article class="summary-card"><div class="metric-top"><span class="metric-icon teal" aria-hidden="true">⬡</span><span class="metric-caption">THREAT CONTEXT</span></div><p class="card-label">MITRE Techniques</p><h2 id="technique-count">0</h2><p class="metric-footnote">Unique techniques mapped to incidents</p></article>
             </section>
             <section class="panel" id="integrations-panel">
                 <div class="panel-header">
@@ -68,6 +68,22 @@
                             <button type="submit" class="filter-button">View sample records</button>
                         </form>
                         <div id="dataset-records" aria-live="polite"></div>
+                        <div class="dataset-import-action">
+                            <p class="muted-text">Import selected benchmark records into the operational event store so they can be reviewed in Investigations. Imported rows retain dataset provenance and are not confirmed incidents.</p>
+                            <form id="dataset-import-form" class="integration-form">
+                                <label><span>Dataset to import</span>
+                                    <select id="dataset-import-source" required>
+                                        <option value="CICIDS2017">CICIDS2017</option>
+                                        <option value="FERB">FERB</option>
+                                    </select>
+                                </label>
+                                <label><span>Maximum records (1–100)</span>
+                                    <input id="dataset-import-limit" type="number" min="1" max="100" value="25" required>
+                                </label>
+                                <button type="submit" class="filter-button">Import to investigations</button>
+                            </form>
+                            <div id="dataset-import-status" aria-live="polite"></div>
+                        </div>
                     </section>
                     <section class="integration-card" aria-labelledby="threat-intel-title">
                         <h3 id="threat-intel-title">VirusTotal lookup</h3>
@@ -103,7 +119,7 @@
                     <div class="filter-actions"><button type="submit" class="filter-button">Apply filters</button><button type="button" id="reset-timeline-filters" class="filter-button secondary">Reset</button></div>
                     <p id="timeline-filter-status" class="filter-status" aria-live="polite"></p>
                 </form>
-                <div id="timeline" class="timeline"><div class="empty-state">Loading investigation timeline�</div></div>
+                <div id="timeline" class="timeline"><div class="empty-state">Loading investigation timeline...</div></div>
             </section>
             <section class="panel" id="incidents-panel">
                 <div class="panel-header"><div class="section-title-wrap"><span class="section-kicker">02 / CORRELATION</span><h2>Incident Investigations</h2><p>Select an incident to inspect correlated events, evidence, and context.</p></div><span class="panel-chip">CASE REVIEW</span></div>
@@ -114,7 +130,7 @@
                     <div class="filter-actions"><button type="submit" class="filter-button">Apply filters</button><button type="button" id="reset-incident-filters" class="filter-button secondary">Reset</button></div>
                     <p id="incident-filter-status" class="filter-status" aria-live="polite"></p>
                 </form>
-                <div id="incidents" class="incident-list"><div class="empty-state">Loading incidents�</div></div>
+                <div id="incidents" class="incident-list"><div class="empty-state">Loading incidents...</div></div>
             </section>
             <section class="panel" id="mitre-panel">
                 <div class="panel-header">
@@ -126,7 +142,7 @@
                     <span class="panel-chip">ATT&CK</span>
                 </div>
                 <div id="mitre-techniques" class="technique-list">
-                    <div class="empty-state">Loading technique mappings�</div>
+                    <div class="empty-state">Loading technique mappings...</div>
                 </div>
             </section>
             <section class="panel" id="mitre-review-panel">
@@ -142,7 +158,7 @@
                     <span class="panel-chip">TRIAGE</span>
                 </div>
                 <div id="mitre-assessments" class="assessment-list">
-                    <div class="empty-state">Loading assessment results�</div>
+                    <div class="empty-state">Loading assessment results...</div>
                 </div>
             </section>
             </div>
@@ -152,6 +168,355 @@
             </footer>
         </main>
     </div>
+
+    <style>
+        #incident-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            padding: 24px;
+            background: rgba(3, 8, 18, 0.82);
+            backdrop-filter: blur(8px);
+            overflow-y: auto;
+        }
+        #incident-modal.open {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+        .incident-modal-dialog {
+            position: relative;
+            width: 100%;
+            max-width: 1100px;
+            margin: auto;
+            background: #0b1525;
+            color: #e6edf7;
+            border: 1px solid #293a53;
+            border-radius: 18px;
+            box-shadow: 0 25px 90px rgba(0, 0, 0, 0.55);
+            overflow: hidden;
+        }
+        .incident-modal-header {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 18px 24px;
+            background: #101d30;
+            border-bottom: 1px solid #293a53;
+        }
+        .incident-modal-header h2 { margin: 0; font-size: 18px; }
+        .incident-modal-header p { margin: 5px 0 0; color: #9aabc2; font-size: 12px; }
+        .close-button {
+            flex-shrink: 0;
+            width: 38px;
+            height: 38px;
+            border: 1px solid #354761;
+            border-radius: 10px;
+            background: #17263b;
+            color: #f0f5ff;
+            font-size: 23px;
+            cursor: pointer;
+        }
+        .close-button:hover { background: #263954; }
+        #incident-details { padding: 24px; }
+        .incident-detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .incident-detail-header h2 { overflow-wrap: anywhere; }
+        .incident-detail-section { margin-top: 26px; }
+        .incident-detail-section > h3 {
+            margin-bottom: 14px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #293a53;
+            color: #e6edf7;
+        }
+        .event-fields {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 12px;
+            margin: 14px 0;
+        }
+        .event-field {
+            min-width: 0;
+            padding: 12px;
+            background: #111f33;
+            border: 1px solid #263850;
+            border-radius: 10px;
+        }
+        .event-field-label { display: block; margin-bottom: 7px; color: #8fa4c0; font-size: 11px; }
+        .event-field-value { display: block; overflow-wrap: anywhere; color: #e6edf7; font-size: 13px; }
+        .event-detail-card, .technique-card, .assessment-card, .evidence-card {
+            margin: 12px 0;
+            padding: 16px;
+            background: #101d30;
+            border: 1px solid #293a53;
+            border-radius: 12px;
+            overflow-wrap: anywhere;
+        }
+        .event-detail-card h4, .technique-card h4, .assessment-card h4, .evidence-card h4 { margin-top: 0; }
+        .incident-evidence-section { margin: 0 24px 24px; padding-top: 20px; border-top: 1px solid #293a53; }
+        .incident-evidence-section > h3 { margin-top: 0; }
+        .loading-state, .empty-state { padding: 18px; color: #a5b6cc; line-height: 1.6; }
+        .error-message {
+            padding: 16px;
+            color: #ffb6b6;
+            background: #351b27;
+            border: 1px solid #78364a;
+            border-radius: 10px;
+            overflow-wrap: anywhere;
+        }
+        .incident-card { cursor: pointer; text-align: left; }
+        .incident-card:focus-visible, .close-button:focus-visible { outline: 2px solid #77b8ff; outline-offset: 3px; }
+        #incident-evidence-content pre { max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; }
+        @media (max-width: 640px) {
+            #incident-modal { padding: 8px; }
+            .incident-modal-dialog { border-radius: 12px; }
+            .incident-modal-header { padding: 14px; }
+            #incident-details { padding: 14px; }
+            .event-fields { grid-template-columns: 1fr; }
+            .incident-evidence-section { margin: 0 14px 14px; }
+        }
+    </style>
+
+    <div id="incident-modal"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="incident-modal-title"
+         onclick="if (event.target === this) closeIncidentModal()">
+        <div class="incident-modal-dialog">
+            <header class="incident-modal-header">
+                <div>
+                    <h2 id="incident-modal-title">Incident investigation</h2>
+                    <p>Review correlated activity, threat context, and linked evidence.</p>
+                </div>
+                <button type="button" class="close-button"
+                        aria-label="Close incident details"
+                        onclick="closeIncidentModal()">&times;</button>
+            </header>
+            <div id="incident-details">
+                <div class="loading-state">Select an incident to load its details.</div>
+            </div>
+            <section class="incident-evidence-section">
+                <h3>Linked Evidence &amp; Chain of Custody</h3>
+                <div id="incident-evidence-content" aria-live="polite">
+                    <div class="empty-state">Evidence details will appear when an incident is opened.</div>
+                </div>
+            </section>
+        </div>
+    </div>
+
     <script src="/dashboard/static/app.js"></script>
+
+    <script>
+    (function () {
+        "use strict";
+
+        const TIMELINE_PREVIEW_COUNT = 12;
+        const INCIDENT_PREVIEW_COUNT = 8;
+        let allTimelineEvents = [];
+        let timelineExpanded = false;
+        let allIncidentResults = [];
+        let incidentsExpanded = false;
+
+        const originalFetchApi = window.fetchApi;
+
+        if (typeof originalFetchApi === "function") {
+            window.fetchApi = async function (endpoint) {
+                const result = await originalFetchApi(endpoint);
+
+                // The incident endpoint returns event_ids; resolve them to real event records.
+                if (
+                    typeof endpoint === "string" &&
+                    /^\/incidents\/[^/?]+$/.test(endpoint) &&
+                    result &&
+                    Array.isArray(result.event_ids)
+                ) {
+                    const events = await originalFetchApi("/events");
+                    const wanted = new Set(result.event_ids);
+                    result.events = (Array.isArray(events) ? events : [])
+                        .filter(event => wanted.has(event.event_id));
+
+                    // Build the visible summary from real event records instead of
+                    // showing the same generic fallback for every incident.
+                    result.description = result.events.length
+                        ? result.events.slice(0, 3).map(event => {
+                            const type = event.event_type || "Event";
+                            const description = event.description || "No event description recorded.";
+                            return `${type}: ${description}`;
+                        }).join(" | ")
+                        : "No normalized event records were returned for this incident.";
+                }
+                return result;
+            };
+        }
+
+        function escape(value) {
+            return String(value ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function addToggle(container, label, callback) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "filter-button secondary";
+            button.style.margin = "12px 0";
+            button.textContent = label;
+            button.addEventListener("click", callback);
+            container.appendChild(button);
+        }
+
+        window.renderTimeline = function (events) {
+            const container = document.getElementById("timeline");
+            if (!container) return;
+
+            allTimelineEvents = Array.isArray(events) ? events.slice() : [];
+            allTimelineEvents.sort((a, b) =>
+                new Date(b.timestamp || 0) - new Date(a.timestamp || 0)
+            );
+
+            const visible = timelineExpanded
+                ? allTimelineEvents
+                : allTimelineEvents.slice(0, TIMELINE_PREVIEW_COUNT);
+
+            if (!visible.length) {
+                container.innerHTML = '<div class="empty-state">No investigation events found.</div>';
+                return;
+            }
+
+            container.innerHTML = visible.map(event => `
+                <article class="timeline-item">
+                    <div class="timeline-time">${escape(event.timestamp ? new Date(event.timestamp).toLocaleString() : "Time unavailable")}</div>
+                    <div class="timeline-event">
+                        <strong>${escape(event.event_type || "Event")}</strong>
+                        <span>${escape(event.description || "No description available.")}</span>
+                        <small>Event ID: ${escape(event.event_id)}</small>
+                    </div>
+                </article>
+            `).join("");
+
+            if (allTimelineEvents.length > TIMELINE_PREVIEW_COUNT) {
+                addToggle(
+                    container,
+                    timelineExpanded ? "Show fewer events" : `Show all ${allTimelineEvents.length} events`,
+                    () => {
+                        timelineExpanded = !timelineExpanded;
+                        window.renderTimeline(allTimelineEvents);
+                    }
+                );
+                if (!timelineExpanded) {
+                    const note = document.createElement("p");
+                    note.className = "muted-text";
+                    note.textContent = `Showing ${visible.length} of ${allTimelineEvents.length} events.`;
+                    container.appendChild(note);
+                }
+            }
+        };
+
+        window.renderIncidents = function (incidents) {
+            const container = document.getElementById("incidents");
+            if (!container) return;
+
+            allIncidentResults = Array.isArray(incidents) ? incidents.slice() : [];
+            const severityRank = { High: 3, Medium: 2, Low: 1 };
+            const prioritised = allIncidentResults.slice().sort((a, b) =>
+                (severityRank[b.severity] || 0) - (severityRank[a.severity] || 0) ||
+                (Number(b.event_count) || 0) - (Number(a.event_count) || 0) ||
+                (Number(b.max_correlation_score) || 0) - (Number(a.max_correlation_score) || 0)
+            );
+
+            const visible = incidentsExpanded
+                ? prioritised
+                : prioritised.slice(0, INCIDENT_PREVIEW_COUNT);
+
+            if (!visible.length) {
+                container.innerHTML = '<div class="empty-state">No incidents match the current filters.</div>';
+                return;
+            }
+
+            container.innerHTML = visible.map(incident => {
+                const severity = String(incident.severity || "unknown").toLowerCase();
+                return `
+                    <button type="button" class="incident-card"
+                            data-open-incident="${escape(incident.incident_id)}"
+                            aria-label="Open incident ${escape(incident.incident_id)}">
+                        <span class="incident-id">${escape(incident.incident_id)}</span>
+                        <span><span class="severity severity-${escape(severity)}">${escape(incident.severity || "Unknown")}</span></span>
+                        <span class="incident-description">
+                            ${escape(incident.event_count ?? 0)} event(s)<br>
+                            Sources: ${escape((incident.sources || []).join(", ") || "Unknown")}
+                        </span>
+                        <span class="incident-score">Score: ${escape(incident.max_correlation_score ?? 0)}</span>
+                    </button>
+                `;
+            }).join("");
+
+            container.querySelectorAll("[data-open-incident]").forEach(button => {
+                button.addEventListener("click", () => window.openIncident(button.dataset.openIncident));
+            });
+
+            if (prioritised.length > INCIDENT_PREVIEW_COUNT) {
+                addToggle(
+                    container,
+                    incidentsExpanded ? "Show fewer incidents" : `Show all ${prioritised.length} incidents`,
+                    () => {
+                        incidentsExpanded = !incidentsExpanded;
+                        window.renderIncidents(allIncidentResults);
+                    }
+                );
+                if (!incidentsExpanded) {
+                    const note = document.createElement("p");
+                    note.className = "muted-text";
+                    note.textContent = `Showing ${visible.length} prioritised incidents of ${prioritised.length}. Use filters or “Show all incidents” to explore the rest.`;
+                    container.appendChild(note);
+                }
+            }
+        };
+
+        // Never invent custody records: demo/benchmark events are not acquired evidence.
+        const originalRenderIncidentEvidence = window.renderIncidentEvidence;
+        if (typeof originalRenderIncidentEvidence === "function") {
+            window.renderIncidentEvidence = function (evidence) {
+                const container = document.getElementById("incident-evidence-content");
+                if (!container) return;
+
+                if (!Array.isArray(evidence) || evidence.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <strong>No registered evidence is linked to this incident.</strong>
+                            <p class="muted-text">
+                                Demo and benchmark event records are not acquired evidence files.
+                                To create a chain-of-custody history, acquire or register the original
+                                evidence and link it to the relevant event. No custody records are
+                                generated automatically for sample data.
+                            </p>
+                        </div>`;
+                    return;
+                }
+                originalRenderIncidentEvidence(evidence);
+            };
+        }
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && typeof window.closeIncidentModal === "function") {
+                window.closeIncidentModal();
+            }
+        });
+    })();
+    </script>
+
 </body>
 </html>

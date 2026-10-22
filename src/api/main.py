@@ -1,3 +1,4 @@
+import json
 
 import sqlite3
 from datetime import datetime
@@ -106,6 +107,101 @@ def dataset_sample_records(
         raise HTTPException(status_code=422, detail=str(error)) from error
     except sqlite3.Error as error:
         raise HTTPException(status_code=500, detail="Could not read the dataset sample database.") from error
+
+
+@app.post("/datasets/import-to-events")
+def import_dataset_to_events(
+    dataset: str = Query(..., min_length=1, max_length=64),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """Import a bounded benchmark page into the operational event store.
+
+    Imported records preserve their source provenance and original labels.
+    Repeated requests are idempotent: existing deterministic event IDs are skipped.
+    Benchmark labels are not treated as confirmed incident verdicts.
+    """
+    normalized_dataset = dataset.strip().upper()
+    if not normalized_dataset:
+        raise HTTPException(status_code=422, detail="dataset is required.")
+
+    try:
+        result = get_dataset_records(
+            dataset=normalized_dataset,
+            limit=limit,
+            offset=offset,
+        )
+    except DatasetDatabaseUnavailable as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    except sqlite3.Error as error:
+        raise HTTPException(status_code=500, detail="Could not read the benchmark dataset.") from error
+
+    created = []
+    skipped = []
+    import_time = datetime.now().astimezone().isoformat()
+
+    for record in result["records"]:
+        source_dataset = record["dataset"].strip().upper()
+        row_number = record["source_row_number"]
+        event_id = f"DATA-{source_dataset}-{row_number:06d}"
+        provenance = {
+            "record_kind": "benchmark_review_case",
+            "dataset": source_dataset,
+            "source_event_id": record["event_id"],
+            "source_row_number": row_number,
+            "original_label": record["original_label"],
+            "label_semantics": record["label_semantics"],
+            "original_timestamp": record["timestamp"],
+            "metadata": record["metadata"],
+            "imported_at": import_time,
+        }
+        original_timestamp = record.get("timestamp")
+        timestamp = original_timestamp or import_time
+        label = record.get("original_label") or "Not supplied"
+        description = (
+            f"BENCHMARK REVIEW CASE — dataset={source_dataset}, row={row_number}, "
+            f"original label={label!r}. Labels are dataset annotations, not a confirmed "
+            "real-world incident verdict. Review the preserved provenance before triage."
+        )
+        event = {
+            "event_id": event_id,
+            "timestamp": timestamp,
+            "source": record.get("source") or "system",
+            "event_type": record.get("event_type") or "benchmark_review",
+            "user": None,
+            "host": None,
+            "source_ip": None,
+            "destination_ip": None,
+            "domain": None,
+            "artifact": "benchmark://" + source_dataset + "/" + str(row_number)
+                        + "#" + json.dumps(provenance, sort_keys=True, ensure_ascii=False),
+            "hash": None,
+            "description": description,
+            "confidence": 0.5,
+        }
+        try:
+            insert_event(event)
+            created.append(event_id)
+        except Exception as error:
+            if "UNIQUE constraint failed" in str(error):
+                skipped.append(event_id)
+                continue
+            raise HTTPException(
+                status_code=500,
+                detail=f"Could not import benchmark record {row_number}.",
+            ) from error
+
+    return {
+        "dataset": normalized_dataset,
+        "requested_count": len(result["records"]),
+        "created_count": len(created),
+        "skipped_existing_count": len(skipped),
+        "created_event_ids": created,
+        "skipped_event_ids": skipped,
+        "note": "Imported benchmark records are review cases, not confirmed incidents. Original labels and provenance are preserved.",
+    }
 
 
 app.add_middleware(
