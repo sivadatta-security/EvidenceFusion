@@ -247,6 +247,16 @@ def summarize_incident(incident, events):
         default=0,
     )
 
+    correlation_reasons = [
+        {
+            "event_a": relationship["event_a"],
+            "event_b": relationship["event_b"],
+            "score": relationship["score"],
+            "reasons": relationship["reasons"],
+        }
+        for relationship in relationships
+    ]
+
     mitre_mapping = map_incident_to_mitre(
         incident,
         events,
@@ -263,6 +273,7 @@ def summarize_incident(incident, events):
         else None,
         "sources": sources,
         "relationship_count": len(relationships),
+        "correlation_reasons": correlation_reasons,
         "max_correlation_score": max_correlation_score,
         "severity": classify_severity(max_correlation_score),
         "mitre_techniques": mitre_mapping["techniques"],
