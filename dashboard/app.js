@@ -723,8 +723,17 @@ async function loadEvidenceCustody(evidenceId, button) {
             `/incidents/${encodeURIComponent(incidentId)}`
         );
 
-        const events = incident.events ?? [];
+        const allEvents = await fetchApi("/events");
+        const eventIds = new Set(incident.event_ids ?? []);
+        const events = (incident.events ?? allEvents.filter(
+            event => eventIds.has(event.event_id)
+        )).sort((left, right) => String(left.timestamp ?? "").localeCompare(
+            String(right.timestamp ?? "")
+        ));
         const techniques = incident.mitre_techniques ?? [];
+        const incidentDescription = events.length
+            ? `${events.length} event(s) grouped for review across ${(incident.sources ?? []).join(", ") || "unknown sources"}. Correlation indicates a relationship for investigation; it does not by itself confirm malicious activity.`
+            : "No event details are available for this incident.";
 
         content.innerHTML = `
             <div class="incident-detail-header">
@@ -737,7 +746,7 @@ async function loadEvidenceCustody(evidenceId, button) {
             </div>
 
             <p>${escapeHtml(
-                incident.description ?? "No description available."
+                incident.description ?? incidentDescription
             )}</p>
 
             <div class="event-fields">
@@ -747,6 +756,21 @@ async function loadEvidenceCustody(evidenceId, button) {
                 ${formatField("Sources", (incident.sources ?? []).join(", "))}
                 ${formatField("Correlation Score", incident.max_correlation_score)}
             </div>
+
+            <section class="incident-detail-section">
+                <h3>Correlation explanation</h3>
+                ${
+                    (incident.correlation_reasons ?? []).length
+                        ? incident.correlation_reasons.map(item => `
+                            <article class="event-detail-card">
+                                <p><strong>${escapeHtml(item.event_a)} ↔ ${escapeHtml(item.event_b)}</strong></p>
+                                <p>Pair score: ${escapeHtml(item.score)}</p>
+                                <p>Matching factors: ${escapeHtml((item.reasons ?? []).join(", ") || "No reason details returned")}</p>
+                            </article>
+                        `).join("")
+                        : `<p class="empty-state">No qualifying pairwise correlation details are available. This may be an isolated review record.</p>`
+                }
+            </section>
 
             <section class="incident-detail-section">
                 <h3>Correlated Events</h3>
@@ -764,6 +788,8 @@ async function loadEvidenceCustody(evidenceId, button) {
                                     ${formatField("Source IP", event.source_ip)}
                                     ${formatField("Destination IP", event.destination_ip)}
                                     ${formatField("Domain", event.domain)}
+                                    ${formatField("Confidence", event.confidence)}
+                                    ${formatField("Artifact / provenance reference", event.artifact)}
                                 </div>
                                 <p>${escapeHtml(event.description)}</p>
                             </article>
@@ -1089,10 +1115,57 @@ async function loadDashboard() {
 
 
 /* =========================
+   IMPORT BENCHMARK DATA INTO INCIDENT WORKFLOW
+   ========================= */
+
+async function importDatasetToEvents(event) {
+    event.preventDefault();
+    const dataset = document.getElementById("dataset-import-source")?.value;
+    const limit = Number(document.getElementById("dataset-import-limit")?.value || 25);
+    const status = document.getElementById("dataset-import-status");
+    const button = document.querySelector("#dataset-import-form button[type='submit']");
+
+    if (!dataset || !Number.isInteger(limit) || limit < 1 || limit > 100) {
+        if (status) status.innerHTML = '<p class="error-message">Choose a dataset and a limit from 1 to 100.</p>';
+        return;
+    }
+
+    if (status) {
+        status.innerHTML = '<p class="muted-text">Importing benchmark records with provenance...</p>';
+    }
+    if (button) button.disabled = true;
+
+    try {
+        const response = await fetch(
+            `${API_BASE_URL}/datasets/import-to-events?dataset=${encodeURIComponent(dataset)}&limit=${limit}`,
+            { method: "POST" }
+        );
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.detail || `Import failed: ${response.status}`);
+        }
+        const result = await response.json();
+
+        if (status) {
+            status.innerHTML = `<p class="success-message">Imported ${escapeHtml(result.created_count)} new record(s); skipped ${escapeHtml(result.skipped_existing_count)} existing record(s). These remain benchmark review cases.</p>`;
+        }
+        await loadDashboard();
+    } catch (error) {
+        console.error("Dataset import failed:", error);
+        if (status) status.innerHTML = `<p class="error-message">Import failed: ${escapeHtml(error.message)}</p>`;
+    } finally {
+        if (button) button.disabled = false;
+    }
+}
+
+/* =========================
    INITIALIZE DASHBOARD
    ========================= */
 
 document.addEventListener("DOMContentLoaded", () => {
+    const importForm = document.getElementById("dataset-import-form");
+    if (importForm) importForm.addEventListener("submit", importDatasetToEvents);
+
     const datasetForm = document.getElementById("dataset-records-form");
     if (datasetForm) {
         datasetForm.addEventListener("submit", event => {
